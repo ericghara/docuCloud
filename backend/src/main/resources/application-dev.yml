@@ -1,0 +1,17 @@
+spring:
+  r2dbc:
+    name: docu-cloud-dev
+    url: r2dbc:postgresql://localhost:5435
+    username: root
+    password: password
+
+logging:
+  level:
+    org:
+      springframework: DEBUG
+#        r2dbc: DEBUG
+#        security: DEBUG
+
+app:
+  security:
+    allowed-origins: https://auth.ericgha.com, http://localhost:8080/, http://localhost:3000/

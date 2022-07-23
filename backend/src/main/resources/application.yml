@@ -1,0 +1,29 @@
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+spring:
+  main:
+    web-application-type: reactive
+#  security:
+#    oauth2:
+#      client:
+#        registration:
+#          ToDo:
+#            client-id: ToDo
+#            client-authentication-method: none
+#            authorization-grant-type: authorization_code
+#            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+#            scope: openid, profile, roles
+#        provider:
+#          ToDo:
+#            issuer-uri: https://auth.ericgha.com/realms/ericgha.com
+#      resourceserver:
+#        jwt:
+#          issuer-uri: https://auth.ericgha.com/realms/ericgha.com
+  sql:
+    init:
+      mode: never
+
