@@ -31,6 +31,9 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'io.projectreactor:reactor-test'
+    testImplementation 'org.testcontainers:testcontainers:1.17.3'
+    testImplementation 'org.testcontainers:postgresql:1.17.3'
+    testImplementation 'org.testcontainers:junit-jupiter:1.17.3'
     jooqGenerator 'org.postgresql:postgresql:42.3.2'
     jooqGenerator 'org.jooq:jooq-postgres-extensions'
 }
@@ -76,7 +79,7 @@ jooq {
             generateSchemaSourceOnCompilation = true  // default (can be omitted)
 
             generationTool {
-                logging = Logging.DEBUG
+                logging = Logging.WARN
                 jdbc {
                     driver = 'org.postgresql.Driver'
                     url = 'jdbc:postgresql://localhost:5435/docu-cloud-dev'
@@ -90,14 +93,11 @@ jooq {
                         inputSchema = 'public'
                         forcedTypes {
                             forcedType {
-                                name = 'varchar'
-                                includeExpression = '.*'
-                                includeTypes = 'JSONB?'
-                            }
-                            forcedType {
-                                name = 'varchar'
-                                includeExpression = '.*'
-                                includeTypes = 'INET'
+//                                name = 'varchar'
+                                userType = 'org.jooq.postgres.extensions.types.Ltree'
+                                binding = 'org.jooq.postgres.extensions.bindings.LtreeBinding'
+                                includeExpression = '.*tree.path.*'
+                                includeTypes = 'LTREE?'
                             }
                         }
                     }
@@ -108,8 +108,8 @@ jooq {
                         fluentSetters = true
                     }
                     target {
-                        packageName = 'com.ericgha.backend.jooq'
-                        directory = 'build/generated-src/jooq/main'
+                        packageName = 'com.ericgha.docuCloud.jooq'
+                        directory = 'build/generated/source/jooq/main'
                     }
                     strategy.name = 'org.jooq.codegen.DefaultGeneratorStrategy'
                 }
