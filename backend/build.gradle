@@ -25,6 +25,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.jooq:jooq-postgres-extensions'
     implementation 'org.springframework.boot:spring-boot-starter-jooq'
+    implementation 'org.projectlombok:lombok:1.18.22'
     compileOnly 'org.projectlombok:lombok'
     runtimeOnly 'org.postgresql:r2dbc-postgresql'
     annotationProcessor 'org.projectlombok:lombok'
@@ -34,6 +35,8 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers:1.17.3'
     testImplementation 'org.testcontainers:postgresql:1.17.3'
     testImplementation 'org.testcontainers:junit-jupiter:1.17.3'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+    testCompileOnly 'org.projectlombok:lombok'
     jooqGenerator 'org.postgresql:postgresql:42.3.2'
     jooqGenerator 'org.jooq:jooq-postgres-extensions'
 }
