@@ -6,9 +6,12 @@ import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
 import jakarta.annotation.PostConstruct;
 import org.jooq.DSLContext;
+import org.jooq.postgres.extensions.types.Ltree;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import reactor.core.publisher.Mono;
@@ -19,7 +22,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest
 @EnabledPostgresTestContainer
@@ -45,9 +51,6 @@ public class TestFileTreeTest {
             .username( "unitTester" )
             .realm( "cloud9" ).build();
 
-
-
-
     @BeforeEach
     void before() throws URISyntaxException, IOException {
         // testcontainers cannot reliably run complex init scrips (ie with declared functions)
@@ -67,9 +70,81 @@ public class TestFileTreeTest {
         assertEquals(newRecord, testTree.getRecordByPath( "" ) );
         assertEquals( pathStr, newRecord.getPath().data() );
         assertEquals(  objectType, newRecord.getObjectType() );
+        assertEquals( user0.getUserId() , newRecord.getUserId() );
     }
 
+    @Test
+    @DisplayName( "add adds the expected record" )
+    void addStoresRecord() {
+        String pathStr = "";
+        ObjectType objectType = ObjectType.ROOT;
+        var testTree = treeFactory.construct( user0 );
+        TreeRecord newRecord = testTree.add( objectType, pathStr);
+        assertEquals( newRecord, testTree.getRecordByPath( "" ) );
+    }
 
+    @Test
+    @DisplayName( "assertNoChanges doesn't throw when no changes" )
+    void assertNoChangesDoesNotThrow() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        tree1.add(ObjectType.FILE, "file100");
+        assertDoesNotThrow( tree0::assertNoChanges );
+    }
 
+    @Test
+    @DisplayName( "assertChanges throws when untracked change" )
+    void assertNoChangesThrows() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        treeTestQueries.create(ObjectType.FILE, Ltree.valueOf("file100"), user0.getUserId())
+                .block();
+        assertThrows( AssertionError.class, tree0::assertNoChanges );
+        assertDoesNotThrow( tree1::assertNoChanges );
+    }
+
+    @Test
+    @DisplayName( "assertNoChangesFor does not throw when no changes" )
+    void assertNoChangesForDoesNotThrow() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        treeTestQueries.create(ObjectType.FILE, Ltree.valueOf("file100"), user0.getUserId())
+                .block();
+        assertDoesNotThrow( () -> tree0.assertNoChangesFor( "", "dir0", "file0", "dir0.dir1",
+                "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" ) );
+    }
+
+    @Test
+    @DisplayName( "assertNoChangesFor throws when untracked change" )
+    void assertNoChangesForThrows() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        treeTestQueries.create(ObjectType.FILE, Ltree.valueOf("file100"), user0.getUserId())
+                .block();
+        assertThrows(AssertionError.class, () -> tree0.assertNoChangesFor( "", "dir0", "file0", "dir0.dir1",
+                "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1", "file100" ) );
+    }
+
+    @Test
+    @DisplayName("addFromCsv adds expected records")
+    void addFromCsvAddsExpectedRecords() {
+        String csv = """
+               FILE, "dir0.dir1.file0"
+                """;
+        TreeTestQueries testQueriesMock = Mockito.mock(TreeTestQueries.class);
+        Mockito.when( testQueriesMock.create( any(ObjectType.class), any( Ltree.class), anyString() ) )
+                .thenReturn(Mono.just(new TreeRecord() ) );
+
+        ArgumentCaptor<ObjectType> typeCaptor = ArgumentCaptor.forClass(ObjectType.class);
+        ArgumentCaptor<Ltree> ltreeCaptor = ArgumentCaptor.forClass( Ltree.class );
+        ArgumentCaptor<String> userIdCaptor = ArgumentCaptor.forClass( String.class );
+
+        TestFileTreeFactory factory = new TestFileTreeFactory( testQueriesMock );
+        TestFileTree testTree = factory.construct( user0 );
+        testTree.addFromCsv( csv );
+
+        verify( testQueriesMock ).create(typeCaptor.capture(), ltreeCaptor.capture(), userIdCaptor.capture() );
+        assertEquals( ObjectType.FILE, typeCaptor.getValue() );
+        assertEquals( Ltree.valueOf("dir0.dir1.file0") , ltreeCaptor.getValue() );
+        assertEquals( user0.getUserId(), userIdCaptor.getValue() );
+    }
 
 }

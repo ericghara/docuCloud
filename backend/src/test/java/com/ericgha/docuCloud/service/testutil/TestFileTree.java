@@ -1,6 +1,5 @@
 package com.ericgha.docuCloud.service.testutil;
 
-import com.ericgha.docuCloud.converter.LtreeFormatter;
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
@@ -22,15 +21,13 @@ class TestFileTree {
     private final Map<Ltree, TreeRecord> recordByPath;
     private final String userId;
     private final TreeTestQueries testQueries;
-    private final LtreeFormatter ltreeFormatter;
 
-    private final CsvParser csvParser = new CsvParser();
+    private final TestFileTreeCsvParser testFileTreeCsvParser = new TestFileTreeCsvParser();
 
     public TestFileTree(String userId, TreeTestQueries testQueries) {
         this.userId = userId;
         this.testQueries = testQueries;
         this.recordByPath = new HashMap<>();
-        this.ltreeFormatter =  new LtreeFormatter();
     }
 
     public TestFileTree(CloudUser user, TreeTestQueries testQueries) {
@@ -70,51 +67,20 @@ class TestFileTree {
 
     public TreeRecord add(ObjectType objectType, Ltree path) {
         return testQueries.create(objectType, path, userId)
-                .doOnNext(record -> recordByPath.put(record.getPath(), record) )
+                .doOnNext(record -> {
+                    if (!Objects.isNull(recordByPath.put(record.getPath(), record) ) )  {
+                    throw new IllegalStateException("Duplicate insert");
+                }})
                 .block();
     }
     public TreeRecord add(ObjectType objectType, String pathStr) {
-        return add(ObjectType.ROOT, Ltree.valueOf( pathStr ) );
+        return add(objectType, Ltree.valueOf( pathStr ) );
     }
 
     public List<TreeRecord> addFromCsv(String csv) {
-        return csvParser.parse( csv )
+        return testFileTreeCsvParser.parse( csv )
                 .map( csvRecord -> this.add( csvRecord.objectType(), csvRecord.path() ) )
-                .peek( treeRecord -> Objects.requireNonNull(treeRecord.getObjectId(), "Insert error" ) )
-                .peek( treeRecord -> recordByPath.put(treeRecord.getPath(), treeRecord) )
                 .toList();
     }
 
-    class CsvParser {
-        record CsvRecord(ObjectType objectType, Ltree path) {}
-
-        Stream<CsvRecord> parse(String csv) {
-            return csv.lines().map(this::splitLine )
-                    .filter( split -> split.length == 2 )
-                    .map(this::toCsvRecord);
-        }
-
-        // returns String[0] for comments else String[2]
-        private String[] splitLine(String line) {
-            if (line.matches("^\s*#") ) {
-                // a comment;
-                return new String[0];
-            }
-            String[] split = line.strip()
-                    .split("\s*,\s*");
-            if (split.length != 2) {
-                throw new IllegalArgumentException( "Unable to parse line: " + line );
-            }
-            return split;
-        }
-
-        private CsvRecord toCsvRecord(String[] split) {
-            ObjectType objectType = ObjectType.valueOf(split[0].toUpperCase() );
-            try {
-                return new CsvRecord(objectType, ltreeFormatter.parse( split[1], null ) );
-            } catch (Exception e) {
-                throw new IllegalArgumentException( e );
-            }
-        }
-    }
 }

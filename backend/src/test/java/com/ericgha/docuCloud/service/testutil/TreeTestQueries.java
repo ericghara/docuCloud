@@ -22,7 +22,6 @@ public class TreeTestQueries {
     private final DSLContext dsl;
 
     @Transactional
-    // for testing
     public Mono<TreeRecord> create(ObjectType objectType, Ltree path, String userId) {
         return Mono.from( dsl.insertInto( TREE )
                 .set( TREE.OBJECT_ID, defaultValue(String.class) )
