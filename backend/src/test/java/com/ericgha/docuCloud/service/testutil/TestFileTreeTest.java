@@ -65,9 +65,9 @@ public class TestFileTreeTest {
     void addAddsRecord() {
         String pathStr = "";
         ObjectType objectType = ObjectType.ROOT;
-        var testTree = treeFactory.construct( user0 );
+        var testTree = treeFactory.constructRoot( user0 );
         TreeRecord newRecord = testTree.add( objectType, pathStr);
-        assertEquals(newRecord, testTree.getRecordByPath( "" ) );
+        assertEquals(newRecord, testTree.getOrigRecord( "" ) );
         assertEquals( pathStr, newRecord.getPath().data() );
         assertEquals(  objectType, newRecord.getObjectType() );
         assertEquals( user0.getUserId() , newRecord.getUserId() );
@@ -78,9 +78,9 @@ public class TestFileTreeTest {
     void addStoresRecord() {
         String pathStr = "";
         ObjectType objectType = ObjectType.ROOT;
-        var testTree = treeFactory.construct( user0 );
+        var testTree = treeFactory.constructRoot( user0 );
         TreeRecord newRecord = testTree.add( objectType, pathStr);
-        assertEquals( newRecord, testTree.getRecordByPath( "" ) );
+        assertEquals( newRecord, testTree.getOrigRecord( "" ) );
     }
 
     @Test
@@ -138,7 +138,7 @@ public class TestFileTreeTest {
         ArgumentCaptor<String> userIdCaptor = ArgumentCaptor.forClass( String.class );
 
         TestFileTreeFactory factory = new TestFileTreeFactory( testQueriesMock );
-        TestFileTree testTree = factory.construct( user0 );
+        TestFileTree testTree = factory.constructRoot( user0 );
         testTree.addFromCsv( csv );
 
         verify( testQueriesMock ).create(typeCaptor.capture(), ltreeCaptor.capture(), userIdCaptor.capture() );

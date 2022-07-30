@@ -7,9 +7,9 @@ import lombok.RequiredArgsConstructor;
 import org.jooq.CommonTableExpression;
 import org.jooq.DSLContext;
 import org.jooq.Record2;
+import org.jooq.Record5;
 import org.jooq.ResultQuery;
 import org.jooq.SelectConditionStep;
-import org.jooq.impl.DSL;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -44,24 +45,31 @@ public class TreeService {
     }
 
     @Transactional
-    public Mono<Integer> mvFile(Ltree newPath, TreeRecord treeRecord, CloudUser cloudUser) {
+    public Mono<Long> mvFile(Ltree newPath, TreeRecord treeRecord, CloudUser cloudUser) {
+        if (treeRecord.getObjectType() != ObjectType.FILE ) {
+            return Mono.just(0L);
+        }
         return Mono.from( dsl.update( TREE )
-                .set( TREE.PATH, treeRecord.getPath() )
+                .set( TREE.PATH, newPath )
                 .where( TREE.OBJECT_ID.eq( treeRecord.getObjectId() )
                         .and(TREE.USER_ID.eq(cloudUser.getUserId() ) )
-                        .and(TREE.OBJECT_TYPE.eq(ObjectType.FILE) ) ) );
+                        .and(TREE.OBJECT_TYPE.eq(ObjectType.FILE) ) ) )
+                // This is a workaround for a jOOQ bug, Method signature is Integer but actually returns a Long at runtime
+                .map( (Number o) -> o.longValue() );
     }
 
-    SelectConditionStep<Record2<Ltree, Integer>> selectPathAndLevel(TreeRecord curRecord, CloudUser cloudUser) {
+    // the purpose of this query is to check that the source is owned by the user
+    SelectConditionStep<Record2<Ltree, Integer>> selectDirPathAndLevel(TreeRecord curRecord, CloudUser cloudUser) {
         return dsl.select( TREE.PATH.as( "path" ),
                         nlevel( TREE.PATH ).as( "level" ) )
                 .from( TREE )
-                .where( TREE.OBJECT_ID.eq( curRecord.getObjectId() ).and(TREE.USER_ID.eq(cloudUser.getUserId() ) ) );
+                .where( TREE.OBJECT_ID.eq( curRecord.getObjectId() ).and(TREE.USER_ID.eq(cloudUser.getUserId() ) )
+                        .and(TREE.OBJECT_TYPE.eq(ObjectType.DIR) ) );
     }
 
     ResultQuery<Record2<String, Ltree>> createMovePath(Ltree newPath, TreeRecord curRecord, CloudUser cloudUser) {
         CommonTableExpression<Record2<Ltree, Integer>> oldPathCte = name( "oldPath" ).fields( "path", "level" )
-                .as( selectPathAndLevel( curRecord, cloudUser ) );
+                .as( selectDirPathAndLevel( curRecord, cloudUser ) );
         return dsl.with( oldPathCte ).select( TREE.OBJECT_ID,
                         when( oldPathCte.field( "level", Integer.class ).eq( nlevel( TREE.PATH ) ), newPath )
                                 .otherwise( ltreeAddltree( val( newPath ),
@@ -73,7 +81,10 @@ public class TreeService {
     }
 
     @Transactional
-    public Mono<Long> mvPath(TreeRecord curRecord, Ltree newPath, CloudUser cloudUser) {
+    public Mono<Long> mvDir(Ltree newPath, TreeRecord curRecord, CloudUser cloudUser) {
+        if (curRecord.getObjectType() != ObjectType.DIR ) {
+            return Mono.just(0L);
+        }
         var movePathCte = name( "new" ).fields( "object_id", "path" )
                 .as( createMovePath( newPath, curRecord, cloudUser ) );
         return Mono.from( dsl.with( movePathCte )
@@ -86,24 +97,44 @@ public class TreeService {
     }
 
     @Transactional
+    public Flux<TreeRecord> cpDir(Ltree destination, TreeRecord sourceRecord, CloudUser cloudUser) {
+        if (sourceRecord.getObjectType() != ObjectType.DIR ) {
+            return Flux.empty();
+        }
+        // the type of this is "essentially" a TreeRecord but couldn't figure out how to cast it
+        var subTree = copySubTreeForInsert( destination, sourceRecord, cloudUser );
+        return Flux.from( dsl.insertInto(TREE).select( selectFrom(subTree) ).returning( asterisk() ) );
+
+
+    }
+
+    @Transactional
     public Mono<TreeRecord> select(Ltree queryPath) {
         return Mono.from( dsl.selectFrom( TREE ).where( TREE.PATH.eq( queryPath ) ) );
     }
 
-    @Transactional
-        // Does not include self (parent) in results
-    Flux<TreeRecord> selectChildren(Ltree parent) {
-        return Flux.from( dsl.selectFrom( TREE )
-                .where( ltreeIsparent( DSL.val( parent ), TREE.PATH ) )
-                .and( DSL.val( parent ).notEqual( TREE.PATH ) )
-                .orderBy( nlevel( TREE.PATH ).asc(), TREE.PATH.asc() ) );
-    }
 
-    @Transactional
-        // Does not includes self (parent)
-    Flux<TreeRecord> selectChildrenAndParent(Ltree parent) {
-        return Flux.from( dsl.selectFrom( TREE )
-                .where( ltreeIsparent( DSL.val( parent ), TREE.PATH ) )
-                .orderBy( nlevel( TREE.PATH ).asc(), TREE.PATH.asc() ) );
+//    // Does not include self (parent) in results
+//   SelectConditionStep<TreeRecord> selectChildren(TreeRecord treeRecord, CloudUser cloudUser) {
+//        return selectChildrenAndParent( treeRecord, cloudUser )
+//                .and( DSL.val( treeRecord.getPath() ).notEqual( TREE.PATH ) );
+//    }
+
+
+    // Does not includes self (parent)
+    // Creates new uuid and new timestamp, and converts path, other fields remain the same;
+    SelectConditionStep<Record5<UUID, ObjectType, Ltree, String, Timestamp>> copySubTreeForInsert (
+            Ltree destination, TreeRecord sourceRecord, CloudUser cloudUser) {
+        CommonTableExpression<Record2<Ltree, Integer>> oldPathCte = name( "oldPath" ).fields( "path", "level" )
+                .as( selectDirPathAndLevel( sourceRecord, cloudUser ) );
+        return dsl.with( oldPathCte ).select( uuidGenerateV4(), TREE.OBJECT_TYPE,
+                        when( oldPathCte.field( "level", Integer.class ).eq( nlevel( TREE.PATH ) ), destination )
+                                .otherwise( ltreeAddltree( val( destination ),
+                                        subpath2( TREE.PATH, nlevel( oldPathCte.field( "path", Ltree.class ) ) ) ) )
+                                .as( "path" ),
+                        TREE.USER_ID, currentTimestamp() )
+                .from( TREE, oldPathCte )
+                .where( TREE.USER_ID.eq( cloudUser.getUserId() ).and(
+                        ltreeIsparent( oldPathCte.field( "path", Ltree.class ), TREE.PATH ) ) );
     }
 }

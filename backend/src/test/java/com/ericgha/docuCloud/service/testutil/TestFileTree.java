@@ -16,7 +16,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
-class TestFileTree {
+public class TestFileTree {
 
     private final Map<Ltree, TreeRecord> recordByPath;
     private final String userId;
@@ -34,13 +34,27 @@ class TestFileTree {
         this( user.getUserId(), testQueries);
     }
 
-    public TreeRecord getRecordByPath(Ltree path) {
-        return recordByPath.get( path );
+    public TreeRecord getOrigRecord(Ltree path) {
+        var orig = recordByPath.get( path );
+        // copy doesn't copy objectId...
+        var copy = orig.copy();
+        copy.setObjectId( orig.getObjectId() );
+        return copy;
     }
 
-    public TreeRecord getRecordByPath(String pathStr) {
-        return getRecordByPath( Ltree.valueOf( pathStr ) );
+    public TreeRecord getOrigRecord(String pathStr) {
+        return getOrigRecord( Ltree.valueOf( pathStr ) );
     }
+
+    public TreeRecord fetchCurRecord(String objectId) {
+        return testQueries.getByObjectId( objectId );
+    }
+    // Parses objectId from tree record, ignores all other info
+    public TreeRecord fetchCurRecord(TreeRecord origRecord) {
+        return fetchCurRecord(origRecord.getObjectId() );
+    }
+
+
 
     public void assertNoChanges() {
         List<TreeRecord> found = testQueries.getAllUserObjects(userId);

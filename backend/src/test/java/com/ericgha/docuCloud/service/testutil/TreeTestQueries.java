@@ -24,11 +24,11 @@ public class TreeTestQueries {
     @Transactional
     public Mono<TreeRecord> create(ObjectType objectType, Ltree path, String userId) {
         return Mono.from( dsl.insertInto( TREE )
-                .set( TREE.OBJECT_ID, defaultValue(String.class) )
+                .set( TREE.OBJECT_ID, defaultValue( String.class ) )
                 .set( TREE.OBJECT_TYPE, objectType )
                 .set( TREE.PATH, path )
-                .set(TREE.USER_ID, userId)
-                .set(TREE.CREATED_AT, defaultValue( LocalDateTime.class) )
+                .set( TREE.USER_ID, userId )
+                .set( TREE.CREATED_AT, defaultValue( LocalDateTime.class ) )
                 .returning( asterisk() )
         );
     }
@@ -40,6 +40,13 @@ public class TreeTestQueries {
                         .orderBy( TREE.OBJECT_ID.asc() ) )
                 .collectList()
                 .block();
+    }
+
+    @Transactional(readOnly = true)
+    public TreeRecord getByObjectId(String objectId) {
+        return Mono.from( dsl.selectFrom( TREE )
+            .where( TREE.OBJECT_ID.eq( objectId ) ) )
+           .block();
     }
 
 }
