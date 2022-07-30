@@ -4,6 +4,7 @@ import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
+import org.jooq.impl.DSL;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -29,6 +30,18 @@ public class TreeTestQueries {
                 .set( TREE.PATH, path )
                 .set( TREE.USER_ID, userId )
                 .set( TREE.CREATED_AT, defaultValue( LocalDateTime.class ) )
+                .returning( asterisk() )
+        );
+    }
+
+    @Transactional
+    public Mono<TreeRecord> update(TreeRecord record) {
+        return Mono.from( dsl.update( TREE )
+                .set( TREE.OBJECT_TYPE, record.getObjectType() )
+                .set( TREE.PATH, record.getPath() )
+                .set( TREE.USER_ID, record.getUserId())
+                .set( TREE.CREATED_AT,  record.getCreatedAt() )
+                .where( TREE.OBJECT_ID.eq(DSL.val(record.getObjectId() ) ) )
                 .returning( asterisk() )
         );
     }

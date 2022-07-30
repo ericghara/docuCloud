@@ -5,16 +5,13 @@ import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 import org.jooq.postgres.extensions.types.Ltree;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
 public class TestFileTree {
 
@@ -36,6 +33,9 @@ public class TestFileTree {
 
     public TreeRecord getOrigRecord(Ltree path) {
         var orig = recordByPath.get( path );
+        if (Objects.isNull( orig ) ) {
+            return null;
+        }
         // copy doesn't copy objectId...
         var copy = orig.copy();
         copy.setObjectId( orig.getObjectId() );
@@ -54,29 +54,31 @@ public class TestFileTree {
         return fetchCurRecord(origRecord.getObjectId() );
     }
 
-
-
-    public void assertNoChanges() {
-        List<TreeRecord> found = testQueries.getAllUserObjects(userId);
-        List<TreeRecord> expected = recordByPath.values()
-                .stream().sorted( Comparator.comparing( TreeRecord::getObjectId ) ).toList();
-        assertIterableEquals( found, expected );
+    public List<TreeRecord> fetchAllUserObjects() {
+        return testQueries.getAllUserObjects(userId);
     }
 
-    public void assertNoChangesFor(Ltree... paths) {
-        Map<Ltree, TreeRecord> curObjects = testQueries.getAllUserObjects( userId )
-                .stream()
-                .collect( Collectors.toMap(
-                        TreeRecord::getPath,
-                        record -> record ) );
-        Stream.of( paths )
-                .forEach( p -> assertEquals( recordByPath.get( p ), curObjects.get( p ),
-                        "Records didn't match for path " + p ) );
+    public List<TreeRecord> fetchAllUserObjects(Comparator<TreeRecord> comparator) {
+        List<TreeRecord> records = testQueries.getAllUserObjects(userId);
+        records.sort(comparator);
+        return records;
     }
 
-    public void assertNoChangesFor(String... pathStrs) {
-        assertNoChangesFor( Stream.of( pathStrs )
-                .map( Ltree::valueOf ).toArray( Ltree[]::new ) );
+    // returns objects in unspecified order;
+    public List<TreeRecord> getTrackedObjects() {
+        return this.recordByPath.values().stream()
+                .map( r -> {
+                    var copy = r.copy();
+                    copy.setObjectId( r.getObjectId() );
+                    return copy;
+                } ).collect( Collectors.toCollection( ArrayList::new ) );
+    }
+
+    // returns objects in order specified by comparator
+    public List<TreeRecord> getTrackedObjects(Comparator<TreeRecord> comparator) {
+        List<TreeRecord> records = this.getTrackedObjects();
+        records.sort(comparator);
+        return records;
     }
 
     public TreeRecord add(ObjectType objectType, Ltree path) {

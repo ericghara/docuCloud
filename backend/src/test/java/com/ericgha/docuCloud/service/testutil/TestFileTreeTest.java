@@ -21,7 +21,10 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
 
+import static com.ericgha.docuCloud.service.testutil.TestFileTreeAssertions.assertNoChanges;
+import static com.ericgha.docuCloud.service.testutil.TestFileTreeAssertions.assertNoChangesFor;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -65,7 +68,7 @@ public class TestFileTreeTest {
     void addAddsRecord() {
         String pathStr = "";
         ObjectType objectType = ObjectType.ROOT;
-        var testTree = treeFactory.constructRoot( user0 );
+        var testTree = treeFactory.construct( user0 );
         TreeRecord newRecord = testTree.add( objectType, pathStr);
         assertEquals(newRecord, testTree.getOrigRecord( "" ) );
         assertEquals( pathStr, newRecord.getPath().data() );
@@ -74,11 +77,11 @@ public class TestFileTreeTest {
     }
 
     @Test
-    @DisplayName( "add adds the expected record" )
+    @DisplayName( "add stores the expected record" )
     void addStoresRecord() {
         String pathStr = "";
         ObjectType objectType = ObjectType.ROOT;
-        var testTree = treeFactory.constructRoot( user0 );
+        var testTree = treeFactory.construct( user0 );
         TreeRecord newRecord = testTree.add( objectType, pathStr);
         assertEquals( newRecord, testTree.getOrigRecord( "" ) );
     }
@@ -89,7 +92,7 @@ public class TestFileTreeTest {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
         tree1.add(ObjectType.FILE, "file100");
-        assertDoesNotThrow( tree0::assertNoChanges );
+        assertDoesNotThrow( () -> assertNoChanges(tree0) );
     }
 
     @Test
@@ -99,8 +102,8 @@ public class TestFileTreeTest {
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
         treeTestQueries.create(ObjectType.FILE, Ltree.valueOf("file100"), user0.getUserId())
                 .block();
-        assertThrows( AssertionError.class, tree0::assertNoChanges );
-        assertDoesNotThrow( tree1::assertNoChanges );
+        assertThrows( AssertionError.class, () -> assertNoChanges(tree0) );
+        assertDoesNotThrow( () -> assertNoChanges(tree1) );
     }
 
     @Test
@@ -109,18 +112,30 @@ public class TestFileTreeTest {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         treeTestQueries.create(ObjectType.FILE, Ltree.valueOf("file100"), user0.getUserId())
                 .block();
-        assertDoesNotThrow( () -> tree0.assertNoChangesFor( "", "dir0", "file0", "dir0.dir1",
+        assertDoesNotThrow( () -> assertNoChangesFor( tree0, "", "dir0", "file0", "dir0.dir1",
                 "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" ) );
     }
 
     @Test
-    @DisplayName( "assertNoChangesFor throws when untracked change" )
-    void assertNoChangesForThrows() {
+    @DisplayName( "assertNoChangesFor throws when provided an untracked object" )
+    void assertNoChangesForThrowsWhenProvidedUntrackedObject() {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         treeTestQueries.create(ObjectType.FILE, Ltree.valueOf("file100"), user0.getUserId())
                 .block();
-        assertThrows(AssertionError.class, () -> tree0.assertNoChangesFor( "", "dir0", "file0", "dir0.dir1",
+        assertThrows(AssertionError.class, () -> assertNoChangesFor( tree0, "", "dir0", "file0", "dir0.dir1",
                 "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1", "file100" ) );
+    }
+
+    @Test
+    @DisplayName( "assertNoChangesFor throws when tracked object modified" )
+    void assertNoChangesForThrowsWhenUntrackedObjectCreated() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        TreeRecord modified = tree0.getOrigRecord( "dir0" );
+        modified.setCreatedAt( LocalDateTime.now() );
+        treeTestQueries.update(modified)
+                .block();
+        assertThrows(AssertionError.class, () -> assertNoChangesFor( tree0, "", "dir0", "file0", "dir0.dir1",
+                "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1") );
     }
 
     @Test
@@ -131,7 +146,7 @@ public class TestFileTreeTest {
                 """;
         TreeTestQueries testQueriesMock = Mockito.mock(TreeTestQueries.class);
         Mockito.when( testQueriesMock.create( any(ObjectType.class), any( Ltree.class), anyString() ) )
-                .thenReturn(Mono.just(new TreeRecord() ) );
+                .thenAnswer( invocation -> Mono.just(new TreeRecord(null, null, invocation.getArgument(1), null, null) ) );
 
         ArgumentCaptor<ObjectType> typeCaptor = ArgumentCaptor.forClass(ObjectType.class);
         ArgumentCaptor<Ltree> ltreeCaptor = ArgumentCaptor.forClass( Ltree.class );
@@ -139,9 +154,10 @@ public class TestFileTreeTest {
 
         TestFileTreeFactory factory = new TestFileTreeFactory( testQueriesMock );
         TestFileTree testTree = factory.constructRoot( user0 );
+
         testTree.addFromCsv( csv );
 
-        verify( testQueriesMock ).create(typeCaptor.capture(), ltreeCaptor.capture(), userIdCaptor.capture() );
+        verify( testQueriesMock, Mockito.times(2) ).create(typeCaptor.capture(), ltreeCaptor.capture(), userIdCaptor.capture() );
         assertEquals( ObjectType.FILE, typeCaptor.getValue() );
         assertEquals( Ltree.valueOf("dir0.dir1.file0") , ltreeCaptor.getValue() );
         assertEquals( user0.getUserId(), userIdCaptor.getValue() );

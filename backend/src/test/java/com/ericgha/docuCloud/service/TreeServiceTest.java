@@ -31,6 +31,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static com.ericgha.docuCloud.jooq.Tables.TREE;
+import static com.ericgha.docuCloud.service.testutil.TestFileTreeAssertions.assertNoChanges;
+import static com.ericgha.docuCloud.service.testutil.TestFileTreeAssertions.assertNoChangesFor;
 import static org.jooq.impl.DSL.now;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -152,8 +154,8 @@ class TreeServiceTest {
         assertEquals( beforeMove.getCreatedAt(), afterMove.getCreatedAt() );
         assertEquals( beforeMove.getUserId(), afterMove.getUserId() );
         assertEquals( newPath, afterMove.getPath() );
-        tree1.assertNoChanges();
-        tree0.assertNoChangesFor( "", "dir0", "file0",
+        assertNoChanges(tree1);
+        assertNoChangesFor( tree0, "", "dir0", "file0",
                 "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3" );
     }
     @Test
@@ -169,8 +171,8 @@ class TreeServiceTest {
         Long rowsChanged = treeService.mvFile( newPath, spoofedRecord, user0).block();
 
         assertEquals(0, rowsChanged, "Unexpected number of rows changed by move");
-        tree0.assertNoChanges();
-        tree1.assertNoChanges();
+        assertNoChanges(tree0);
+        assertNoChanges(tree1);
     }
 
 
@@ -196,8 +198,8 @@ class TreeServiceTest {
             expectedNewRecord.setPath( Ltree.valueOf( expectedNewPath ) );
             assertEquals(expectedNewRecord, tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
         }
-        tree0.assertNoChangesFor( "", "file0" );
-        tree1.assertNoChanges();
+        assertNoChangesFor( tree0, "", "file0" );
+        assertNoChanges(tree1);
     }
 
     @Test
@@ -221,8 +223,8 @@ class TreeServiceTest {
             expectedNewRecord.setPath( Ltree.valueOf( expectedNewPath ) );
             assertEquals(expectedNewRecord, tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
         }
-        tree0.assertNoChangesFor( "", "file0" );
-        tree1.assertNoChanges();
+        assertNoChangesFor( tree0, "", "file0" );
+        assertNoChanges(tree1);
     }
 
 
@@ -248,8 +250,8 @@ class TreeServiceTest {
             expectedNewRecord.setPath( Ltree.valueOf( expectedNewPath ) );
             assertEquals(expectedNewRecord, tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
         }
-        tree0.assertNoChangesFor( "", "dir0", "file0", "dir0.dir1", "dir0.dir1.dir2" );
-        tree1.assertNoChanges();
+        assertNoChangesFor( tree0, "", "dir0", "file0", "dir0.dir1", "dir0.dir1.dir2" );
+        assertNoChanges(tree1);
     }
 
     @Test
@@ -269,8 +271,8 @@ class TreeServiceTest {
                 .expectNext( 0L )
                 .verifyComplete();
 
-        tree0.assertNoChanges();
-        tree1.assertNoChanges();
+        assertNoChanges(tree0);
+        assertNoChanges(tree1);
     }
 
     @Test
@@ -284,7 +286,7 @@ class TreeServiceTest {
         Ltree destination = Ltree.valueOf( "dir100" );
 
         Flux<String> copy = treeService.cpDir(destination, source, user0)
-                .sort( treeRecordComparators::compareByLtree ).map( r -> r.getPath().data() );
+                .sort( TreeRecordComparators::compareByLtree ).map( r -> r.getPath().data() );
         List<String> expectedPaths = List.of("dir100", "dir100.dir1", "dir100.dir1.dir2", "dir100.dir3", "dir100.dir3.file1");
 
         StepVerifier.create(copy).expectNextSequence( expectedPaths ).verifyComplete();
