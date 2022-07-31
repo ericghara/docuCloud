@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 import static com.ericgha.docuCloud.jooq.Tables.TREE;
@@ -29,7 +29,7 @@ public class TreeTestQueries {
                 .set( TREE.OBJECT_TYPE, objectType )
                 .set( TREE.PATH, path )
                 .set( TREE.USER_ID, userId )
-                .set( TREE.CREATED_AT, defaultValue( LocalDateTime.class ) )
+                .set( TREE.CREATED_AT, defaultValue( OffsetDateTime.class ) )
                 .returning( asterisk() )
         );
     }

@@ -1,6 +1,8 @@
-package com.ericgha.docuCloud.service.testutil;
+package com.ericgha.docuCloud.service.testutil.assertion;
 
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
+import com.ericgha.docuCloud.service.testutil.TestFileTree;
+import com.ericgha.docuCloud.service.testutil.TreeRecordComparators;
 import org.jooq.postgres.extensions.types.Ltree;
 
 import java.util.List;
@@ -11,10 +13,15 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
+
+ /** A collection of assertions to verify specificity of mutation operations
+  * on a {@link TestFileTree} and therefore the database.  Methods are designed
+  * to test that mutation <em>did not</em> occur to certain database records.
+ **/
 public class TestFileTreeAssertions {
 
     static public void assertNoChanges(TestFileTree tree) {
-        List<TreeRecord> found = tree.fetchAllUserObjects(TreeRecordComparators::compareByObjectId);
+        List<TreeRecord> found = tree.fetchAllUserObjects( TreeRecordComparators::compareByObjectId);
         List<TreeRecord> expected = tree.getTrackedObjects(TreeRecordComparators::compareByObjectId);
         assertIterableEquals( found, expected );
     }

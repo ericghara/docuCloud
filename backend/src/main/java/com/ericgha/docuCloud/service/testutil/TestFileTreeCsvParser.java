@@ -1,7 +1,8 @@
 package com.ericgha.docuCloud.service.testutil;
 
-import com.ericgha.docuCloud.converter.LtreeFormatter;
+import com.ericgha.docuCloud.converter.CsvLtreeFormatter;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
+import lombok.NonNull;
 import org.jooq.postgres.extensions.types.Ltree;
 
 import java.util.stream.Stream;
@@ -13,9 +14,9 @@ class TestFileTreeCsvParser {
     record CsvRecord(ObjectType objectType, Ltree path) {
     }
 
-    private final LtreeFormatter ltreeFormatter = new LtreeFormatter();
+    private final CsvLtreeFormatter ltreeFormatter = new CsvLtreeFormatter();
 
-    Stream<CsvRecord> parse(String csv) {
+    Stream<CsvRecord> parse(@NonNull String csv) {
         return csv.lines().map( this::splitLine )
                 .filter( split -> split.length == 2 )
                 .map( this::toCsvRecord );

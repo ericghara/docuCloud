@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
 
-  db:
+  postgres-db:
     container_name: docu-cloud-dev-db
     image: postgres:14
     restart: always
@@ -13,9 +13,9 @@ services:
     ports:
       - "5435:5432"
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - postgres-db-data:/var/lib/postgresql/data
 
 volumes:
-  db-data:
+  postgres-db-data:
     name: docu-cloud-dev-db_data
     external: false

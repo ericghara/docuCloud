@@ -8,7 +8,7 @@
 	object_type object_type NOT NULL,
 	PATH ltree NOT NULL,
 	user_id varchar(36) NOT NULL,
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	unique(user_id, path)
 );
 

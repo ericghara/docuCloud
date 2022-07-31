@@ -8,7 +8,15 @@ import java.text.ParseException;
 import java.util.Locale;
 import java.util.Objects;
 
-public class LtreeFormatter implements Formatter<Ltree> {
+/**
+ * For parsing {@link Ltree}s from CSV files.  In text format
+ * The valid {@code Ltree} with a {@code level = 0} is ambiguous
+ * as it is an empty string.  Therefore, this formatter reads string
+ * representations of Ltree that explicitly have enclosing quotes.
+ * In this case an empty Ltree is represented as "" and a Ltree
+ * with level of 2 is represented as {@code "level1.level2"}.
+ */
+public class CsvLtreeFormatter implements Formatter<Ltree> {
 
     static String parseExceptionMsg = "Unrecognized text input all text must be enclosed in quotes";
 

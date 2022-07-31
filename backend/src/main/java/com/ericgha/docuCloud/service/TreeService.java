@@ -11,14 +11,12 @@ import org.jooq.Record5;
 import org.jooq.ResultQuery;
 import org.jooq.SelectConditionStep;
 import org.jooq.postgres.extensions.types.Ltree;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.sql.Timestamp;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static com.ericgha.docuCloud.jooq.Routines.*;
@@ -30,7 +28,9 @@ import static org.jooq.impl.DSL.*;
 public class TreeService {
 
     private final DSLContext dsl;
-    private final Environment env;
+
+    // todo add an object mapper to the constructor and include it for all public functions
+    // for testing the objectmapper will be NO-OP but for production will conver to Tree pojo
 
     @Transactional
     public Mono<TreeRecord> create(TreeRecord treeRecord, CloudUser cloudUser) {
@@ -39,7 +39,7 @@ public class TreeService {
                 .set( TREE.OBJECT_TYPE, treeRecord.getObjectType() )
                 .set( TREE.PATH, treeRecord.getPath() )
                 .set( TREE.USER_ID, cloudUser.getUserId() )
-                .set( TREE.CREATED_AT, defaultValue( LocalDateTime.class ) )
+                .set( TREE.CREATED_AT, defaultValue( OffsetDateTime.class ) )
                 .returning( asterisk() )
         );
     }
@@ -123,16 +123,16 @@ public class TreeService {
 
     // Does not includes self (parent)
     // Creates new uuid and new timestamp, and converts path, other fields remain the same;
-    SelectConditionStep<Record5<UUID, ObjectType, Ltree, String, Timestamp>> copySubTreeForInsert (
+SelectConditionStep<Record5<String, ObjectType, Ltree, String, OffsetDateTime>> copySubTreeForInsert (
             Ltree destination, TreeRecord sourceRecord, CloudUser cloudUser) {
         CommonTableExpression<Record2<Ltree, Integer>> oldPathCte = name( "oldPath" ).fields( "path", "level" )
                 .as( selectDirPathAndLevel( sourceRecord, cloudUser ) );
-        return dsl.with( oldPathCte ).select( uuidGenerateV4(), TREE.OBJECT_TYPE,
+        return dsl.with( oldPathCte ).select( uuidGenerateV4().cast(String.class).as(TREE.OBJECT_ID), TREE.OBJECT_TYPE,
                         when( oldPathCte.field( "level", Integer.class ).eq( nlevel( TREE.PATH ) ), destination )
                                 .otherwise( ltreeAddltree( val( destination ),
                                         subpath2( TREE.PATH, nlevel( oldPathCte.field( "path", Ltree.class ) ) ) ) )
-                                .as( "path" ),
-                        TREE.USER_ID, currentTimestamp() )
+                                .as( TREE.PATH),
+                        TREE.USER_ID, currentOffsetDateTime().as(TREE.CREATED_AT) )
                 .from( TREE, oldPathCte )
                 .where( TREE.USER_ID.eq( cloudUser.getUserId() ).and(
                         ltreeIsparent( oldPathCte.field( "path", Ltree.class ), TREE.PATH ) ) );

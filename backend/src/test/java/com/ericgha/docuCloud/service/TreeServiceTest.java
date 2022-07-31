@@ -11,6 +11,7 @@ import com.ericgha.docuCloud.service.testutil.TreeTestQueries;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
 import jakarta.annotation.PostConstruct;
 import org.jooq.DSLContext;
+import org.jooq.Record5;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -26,16 +27,16 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 
 import static com.ericgha.docuCloud.jooq.Tables.TREE;
-import static com.ericgha.docuCloud.service.testutil.TestFileTreeAssertions.assertNoChanges;
-import static com.ericgha.docuCloud.service.testutil.TestFileTreeAssertions.assertNoChangesFor;
-import static org.jooq.impl.DSL.now;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.ericgha.docuCloud.service.testutil.assertion.TestFileTreeAssertions.assertNoChanges;
+import static com.ericgha.docuCloud.service.testutil.assertion.TestFileTreeAssertions.assertNoChangesFor;
+import static org.jooq.impl.DSL.currentOffsetDateTime;
+import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @EnabledPostgresTestContainer
@@ -54,7 +55,6 @@ class TreeServiceTest {
     void postConstruct() {
         TreeTestQueries treeTestQueries =  new TreeTestQueries( dsl );
         treeFactory = new TestFileTreeFactory( treeTestQueries );
-        treeRecordComparators = new TreeRecordComparators();
     }
 
     CloudUser user0 = CloudUser.builder()
@@ -122,7 +122,7 @@ class TreeServiceTest {
     void create() {
         TreeRecord record = new TreeRecord( null, ObjectType.ROOT,
                 Ltree.valueOf( "" ), null, null );
-        LocalDateTime currentTime = Mono.from(dsl.select(now()) ).block().component1().toLocalDateTime();
+        OffsetDateTime currentTime = Mono.from(dsl.select(currentOffsetDateTime() ) ).block().component1();
         // returns correct record
         TreeRecord newRecord = treeService.create( record, user0 ).block();
         assertEquals( 36, newRecord.getObjectId().length() );
@@ -276,6 +276,35 @@ class TreeServiceTest {
     }
 
     @Test
+    @DisplayName("copySubTreeForInsert generates new object_id, path and created_at")
+    void copySubTreeForInsertGeneratesExpectedRecords() {
+        // moves dir0.dir3 => dir0.dir2.dir2.dir3
+        TestFileTree tree0 = treeFactory.constructDefault(user0 );
+        TreeRecord source = tree0.getOrigRecord( "dir0.dir3" );
+        Ltree destination = Ltree.valueOf("dir0.dir1.dir2.dir3");
+        // raw type for brevity here...
+        Map<String, ? extends Record5> copyRecordsByPath = Flux.from(treeService.copySubTreeForInsert( destination, source, user0 ) )
+                .collectMap( r -> r.get(TREE.PATH).data() ).block();
+
+        TreeRecord origDir3 = tree0.getOrigRecord( "dir0.dir3" );
+        var curDir3 = copyRecordsByPath.get( destination.data() );
+        assertNotEquals(origDir3.getObjectId(), curDir3.get(TREE.OBJECT_ID));
+        assertEquals( origDir3.getObjectType(), curDir3.get(TREE.OBJECT_TYPE ) );
+        assertEquals( origDir3.getUserId(), curDir3.get(TREE.USER_ID) );
+        assertTrue(origDir3.get(TREE.CREATED_AT).isBefore(curDir3.get(TREE.CREATED_AT) ) );
+
+        TreeRecord origFile1 = tree0.getOrigRecord( "dir0.dir3.file1" );
+        var curFile1 = copyRecordsByPath.get(destination.data() + ".file1" );
+        assertNotEquals(origFile1.getObjectId(), curFile1.get(TREE.OBJECT_ID));
+        assertEquals( origFile1.getObjectType(), curFile1.get(TREE.OBJECT_TYPE ) );
+        assertEquals( origFile1.getUserId(), curFile1.get(TREE.USER_ID) );
+        assertTrue(origFile1.get(TREE.CREATED_AT).isBefore(curFile1.get(TREE.CREATED_AT) ) );
+
+        // this is just the creation of records *to* insert, so not mutating
+        assertNoChanges(tree0);
+    }
+
+    @Test
     @DisplayName("cpDir copies a dir and its children")
     void cpDirCopiesDirAndChildern() {
         TestFileTree tree0 = treeFactory.constructDefault(user0 );
@@ -290,7 +319,8 @@ class TreeServiceTest {
         List<String> expectedPaths = List.of("dir100", "dir100.dir1", "dir100.dir1.dir2", "dir100.dir3", "dir100.dir3.file1");
 
         StepVerifier.create(copy).expectNextSequence( expectedPaths ).verifyComplete();
-
+        assertNoChangesFor( tree0, "dir0", "file0", "dir0.dir1", "dir10.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" );
+        assertNoChanges(tree1);
     }
 
 

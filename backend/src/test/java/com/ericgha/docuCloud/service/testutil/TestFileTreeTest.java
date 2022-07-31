@@ -21,10 +21,10 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
-import static com.ericgha.docuCloud.service.testutil.TestFileTreeAssertions.assertNoChanges;
-import static com.ericgha.docuCloud.service.testutil.TestFileTreeAssertions.assertNoChangesFor;
+import static com.ericgha.docuCloud.service.testutil.assertion.TestFileTreeAssertions.assertNoChanges;
+import static com.ericgha.docuCloud.service.testutil.assertion.TestFileTreeAssertions.assertNoChangesFor;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -58,7 +58,8 @@ public class TestFileTreeTest {
     void before() throws URISyntaxException, IOException {
         // testcontainers cannot reliably run complex init scrips (ie with declared functions)
         // testcontainers/testcontainers-java issue #2814
-        Path input = Paths.get( this.getClass().getClassLoader().getResource( "tests-schema.sql" ).toURI() );
+        Path input = Paths.get( this.getClass().getClassLoader()
+                .getResource( "tests-schema.sql" ).toURI() );
         String sql = Files.readString( input );
         Mono.from( dsl.query( sql ) ).block();
     }
@@ -131,7 +132,7 @@ public class TestFileTreeTest {
     void assertNoChangesForThrowsWhenUntrackedObjectCreated() {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         TreeRecord modified = tree0.getOrigRecord( "dir0" );
-        modified.setCreatedAt( LocalDateTime.now() );
+        modified.setCreatedAt( OffsetDateTime.now() );
         treeTestQueries.update(modified)
                 .block();
         assertThrows(AssertionError.class, () -> assertNoChangesFor( tree0, "", "dir0", "file0", "dir0.dir1",
@@ -157,7 +158,8 @@ public class TestFileTreeTest {
 
         testTree.addFromCsv( csv );
 
-        verify( testQueriesMock, Mockito.times(2) ).create(typeCaptor.capture(), ltreeCaptor.capture(), userIdCaptor.capture() );
+        verify( testQueriesMock, Mockito.times(2) ).create(
+                typeCaptor.capture(), ltreeCaptor.capture(), userIdCaptor.capture() );
         assertEquals( ObjectType.FILE, typeCaptor.getValue() );
         assertEquals( Ltree.valueOf("dir0.dir1.file0") , ltreeCaptor.getValue() );
         assertEquals( user0.getUserId(), userIdCaptor.getValue() );

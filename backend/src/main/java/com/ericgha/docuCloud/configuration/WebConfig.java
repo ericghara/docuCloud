@@ -1,6 +1,6 @@
 package com.ericgha.docuCloud.configuration;
 
-import com.ericgha.docuCloud.converter.LtreeFormatter;
+import com.ericgha.docuCloud.converter.CsvLtreeFormatter;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.format.FormatterRegistry;
 import org.springframework.web.reactive.config.EnableWebFlux;
@@ -12,7 +12,7 @@ public class WebConfig implements WebFluxConfigurer {
 
     @Override
     public void addFormatters(FormatterRegistry registry) {
-        LtreeFormatter formatter = new LtreeFormatter();
+        CsvLtreeFormatter formatter = new CsvLtreeFormatter();
         // todo: if this doesn't work look into registrar
         registry.addFormatter( formatter );
     }
