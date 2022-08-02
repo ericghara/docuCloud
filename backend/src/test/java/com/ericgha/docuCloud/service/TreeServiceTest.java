@@ -11,7 +11,8 @@ import com.ericgha.docuCloud.service.testutil.TreeTestQueries;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
 import jakarta.annotation.PostConstruct;
 import org.jooq.DSLContext;
-import org.jooq.Record5;
+import org.jooq.Record3;
+import org.jooq.Record6;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,6 +32,9 @@ import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static com.ericgha.docuCloud.jooq.Tables.TREE;
 import static com.ericgha.docuCloud.service.testutil.assertion.TestFileTreeAssertions.assertNoChanges;
@@ -58,12 +62,12 @@ class TreeServiceTest {
     }
 
     CloudUser user0 = CloudUser.builder()
-            .userId( "1234567-89ab-cdef-fedc-ba9876543210" )
+            .userId( UUID.fromString("1234567-89ab-cdef-fedc-ba9876543210" ) )
             .username( "unitTester" )
             .realm( "cloud9" ).build();
 
     CloudUser user1 = CloudUser.builder()
-            .userId( "fffffff-ffff-ffff-fedc-ba9876543210" )
+            .userId( UUID.fromString("fffffff-ffff-ffff-fedc-ba9876543210" ) )
             .username( "unitTester" )
             .realm( "cloud9" ).build();
 
@@ -125,7 +129,7 @@ class TreeServiceTest {
         OffsetDateTime currentTime = Mono.from(dsl.select(currentOffsetDateTime() ) ).block().component1();
         // returns correct record
         TreeRecord newRecord = treeService.create( record, user0 ).block();
-        assertEquals( 36, newRecord.getObjectId().length() );
+        assertNotNull( newRecord.getObjectId() );
         assertEquals( record.getObjectType(), newRecord.getObjectType() );
         assertEquals( record.getPath(), newRecord.getPath() );
         assertEquals( user0.getUserId(), newRecord.getUserId() );
@@ -283,7 +287,7 @@ class TreeServiceTest {
         TreeRecord source = tree0.getOrigRecord( "dir0.dir3" );
         Ltree destination = Ltree.valueOf("dir0.dir1.dir2.dir3");
         // raw type for brevity here...
-        Map<String, ? extends Record5> copyRecordsByPath = Flux.from(treeService.copySubTreeForInsert( destination, source, user0 ) )
+        Map<String, ? extends Record6> copyRecordsByPath = Flux.from(treeService.copySubTreeForInsert( destination, source, user0 ) )
                 .collectMap( r -> r.get(TREE.PATH).data() ).block();
 
         TreeRecord origDir3 = tree0.getOrigRecord( "dir0.dir3" );
@@ -310,16 +314,32 @@ class TreeServiceTest {
         TestFileTree tree0 = treeFactory.constructDefault(user0 );
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        String srcPathStr = "dir0";
+        String destPathSr = "dir100";
+        TreeRecord source = tree0.getOrigRecord(srcPathStr);
+        Ltree destination = Ltree.valueOf( destPathSr );
 
-        TreeRecord source = tree0.getOrigRecord("dir0");
-        Ltree destination = Ltree.valueOf( "dir100" );
+        Set<String> expectedPaths = Set.of("dir100", "dir100.dir1", "dir100.dir1.dir2", "dir100.dir3", "dir100.dir3.file1");
 
-        Flux<String> copy = treeService.cpDir(destination, source, user0)
-                .sort( TreeRecordComparators::compareByLtree ).map( r -> r.getPath().data() );
-        List<String> expectedPaths = List.of("dir100", "dir100.dir1", "dir100.dir1.dir2", "dir100.dir3", "dir100.dir3.file1");
+        List<Record3<UUID,UUID,ObjectType>> copy = treeService.cpDir(destination, source, user0).collectList().block();
 
-        StepVerifier.create(copy).expectNextSequence( expectedPaths ).verifyComplete();
-        assertNoChangesFor( tree0, "dir0", "file0", "dir0.dir1", "dir10.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" );
+        for (Record3<UUID,UUID,ObjectType> record : copy) {
+            TreeRecord srcRec = tree0.fetchCurRecord( record.get("source_id", UUID.class) );
+            TreeRecord cpRec = tree0.fetchCurRecord( record.get("destination_id", UUID.class) );
+            String destFromSrc = srcRec.getPath().data().replace(srcPathStr, destPathSr);
+            assertEquals( destFromSrc, cpRec.getPath().data() );
+            assertTrue( record.get("object_type") == srcRec.getObjectType()
+                    && srcRec.getObjectType() == cpRec.getObjectType() );
+        }
+
+        Map<Boolean, List<String>> recordsByNew = tree0.fetchAllUserObjects()
+                .stream().map(TreeRecord::getPath)
+                .map(Ltree::data)
+                .collect( Collectors.partitioningBy( expectedPaths::contains ) );
+
+        assertNoChangesFor( tree0, recordsByNew.get(false).toArray(new String[0]) );
+        assertTrue(expectedPaths.containsAll( recordsByNew.get(true) ) );
+        assertEquals(expectedPaths.size(), recordsByNew.get(true).size() );
         assertNoChanges(tree1);
     }
 

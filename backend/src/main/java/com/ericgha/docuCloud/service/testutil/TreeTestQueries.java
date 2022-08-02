@@ -12,6 +12,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.UUID;
 
 import static com.ericgha.docuCloud.jooq.Tables.TREE;
 import static org.jooq.impl.DSL.asterisk;
@@ -23,9 +24,9 @@ public class TreeTestQueries {
     private final DSLContext dsl;
 
     @Transactional
-    public Mono<TreeRecord> create(ObjectType objectType, Ltree path, String userId) {
+    public Mono<TreeRecord> create(ObjectType objectType, Ltree path, UUID userId) {
         return Mono.from( dsl.insertInto( TREE )
-                .set( TREE.OBJECT_ID, defaultValue( String.class ) )
+                .set( TREE.OBJECT_ID, defaultValue( UUID.class ) )
                 .set( TREE.OBJECT_TYPE, objectType )
                 .set( TREE.PATH, path )
                 .set( TREE.USER_ID, userId )
@@ -47,7 +48,7 @@ public class TreeTestQueries {
     }
 
     @Transactional(readOnly = true)
-    public List<TreeRecord> getAllUserObjects(String userId) {
+    public List<TreeRecord> getAllUserObjects(UUID userId) {
         return Flux.from( dsl.selectFrom( TREE )
                         .where( TREE.USER_ID.eq( userId ) )
                         .orderBy( TREE.OBJECT_ID.asc() ) )
@@ -56,7 +57,7 @@ public class TreeTestQueries {
     }
 
     @Transactional(readOnly = true)
-    public TreeRecord getByObjectId(String objectId) {
+    public TreeRecord getByObjectId(UUID objectId) {
         return Mono.from( dsl.selectFrom( TREE )
             .where( TREE.OBJECT_ID.eq( objectId ) ) )
            .block();

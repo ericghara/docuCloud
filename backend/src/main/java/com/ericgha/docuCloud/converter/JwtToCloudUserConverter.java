@@ -8,6 +8,8 @@ import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
+import java.util.UUID;
+
 @Service
 @Slf4j
 @NoArgsConstructor
@@ -19,7 +21,7 @@ public class JwtToCloudUserConverter implements Converter<Jwt, CloudUser> {
     @Override
     public CloudUser convert(Jwt source) {
         return CloudUser.builder()
-                .userId( source.getClaimAsString( JwtClaim.USER_ID.key() ).toLowerCase() )
+                .userId( UUID.fromString(source.getClaimAsString( JwtClaim.USER_ID.key() ) ) )
                 .username( source.getClaimAsString( JwtClaim.USERNAME.key() ) )
                 .email( source.getClaimAsString( JwtClaim.EMAIL.key() ) )
                 .emailVerified( source.getClaimAsBoolean( JwtClaim.EMAIL_VERIFIED.key() ) )

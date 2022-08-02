@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -27,13 +28,13 @@ import java.util.stream.Collectors;
 public class TestFileTree {
 
     private final Map<Ltree, TreeRecord> recordByPath;
-    private final String userId;
+    private final UUID userId;
     private final TreeTestQueries testQueries;
 
     private final TestFileTreeCsvParser testFileTreeCsvParser = new TestFileTreeCsvParser();
 
 
-    public TestFileTree(@NonNull String userId, @NonNull TreeTestQueries testQueries) {
+    public TestFileTree(@NonNull UUID userId, @NonNull TreeTestQueries testQueries) {
         this.userId = userId;
         this.testQueries = testQueries;
         this.recordByPath = new HashMap<>();
@@ -61,10 +62,11 @@ public class TestFileTree {
     }
 
     @Nullable
-    public TreeRecord fetchCurRecord(String objectId) {
+    public TreeRecord fetchCurRecord(UUID objectId) {
         return testQueries.getByObjectId( objectId );
     }
     // Parses objectId from tree record, ignores all other info
+
     public TreeRecord fetchCurRecord(TreeRecord origRecord) {
         if (Objects.isNull( origRecord.getObjectId() ) ) {
             throw new IllegalArgumentException("Received a TreeRecord with a null objectId");

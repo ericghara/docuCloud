@@ -22,12 +22,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 import static com.ericgha.docuCloud.service.testutil.assertion.TestFileTreeAssertions.assertNoChanges;
 import static com.ericgha.docuCloud.service.testutil.assertion.TestFileTreeAssertions.assertNoChangesFor;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 
 @SpringBootTest
@@ -45,12 +45,12 @@ public class TestFileTreeTest {
     }
 
     CloudUser user0 = CloudUser.builder()
-            .userId( "1234567-89ab-cdef-fedc-ba9876543210" )
+            .userId( UUID.fromString("1234567-89ab-cdef-fedc-ba9876543210" ) )
             .username( "unitTester" )
             .realm( "cloud9" ).build();
 
     CloudUser user1 = CloudUser.builder()
-            .userId( "fffffff-ffff-ffff-fedc-ba9876543210" )
+            .userId( UUID.fromString("fffffff-ffff-ffff-fedc-ba9876543210" ) )
             .username( "unitTester" )
             .realm( "cloud9" ).build();
 
@@ -146,12 +146,12 @@ public class TestFileTreeTest {
                FILE, "dir0.dir1.file0"
                 """;
         TreeTestQueries testQueriesMock = Mockito.mock(TreeTestQueries.class);
-        Mockito.when( testQueriesMock.create( any(ObjectType.class), any( Ltree.class), anyString() ) )
+        Mockito.when( testQueriesMock.create( any(ObjectType.class), any( Ltree.class), any(UUID.class) ) )
                 .thenAnswer( invocation -> Mono.just(new TreeRecord(null, null, invocation.getArgument(1), null, null) ) );
 
         ArgumentCaptor<ObjectType> typeCaptor = ArgumentCaptor.forClass(ObjectType.class);
         ArgumentCaptor<Ltree> ltreeCaptor = ArgumentCaptor.forClass( Ltree.class );
-        ArgumentCaptor<String> userIdCaptor = ArgumentCaptor.forClass( String.class );
+        ArgumentCaptor<UUID> userIdCaptor = ArgumentCaptor.forClass( UUID.class );
 
         TestFileTreeFactory factory = new TestFileTreeFactory( testQueriesMock );
         TestFileTree testTree = factory.constructRoot( user0 );

@@ -4,6 +4,8 @@ import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import lombok.RequiredArgsConstructor;
 
+import java.util.UUID;
+
 @RequiredArgsConstructor
 public class TestFileTreeFactory {
 
@@ -20,7 +22,7 @@ public class TestFileTreeFactory {
 
     private final TreeTestQueries testQueries;
 
-    public TestFileTree constructRoot(String userId) {
+    public TestFileTree constructRoot(UUID userId) {
         var tree = new TestFileTree(userId, testQueries);
         tree.add( ObjectType.ROOT, "");
         return tree;
@@ -30,7 +32,7 @@ public class TestFileTreeFactory {
         return this.constructRoot( cloudUser.getUserId() );
     }
 
-    public TestFileTree constructFromCsv(String csv, String userId) {
+    public TestFileTree constructFromCsv(String csv, UUID userId) {
         var tree = new TestFileTree(userId, testQueries);
         tree.addFromCsv( csv );
         return tree;
@@ -40,7 +42,7 @@ public class TestFileTreeFactory {
         return this.constructFromCsv( csv, cloudUser.getUserId() );
     }
 
-    public TestFileTree construct(String userId) {
+    public TestFileTree construct(UUID userId) {
         return new TestFileTree( userId, testQueries );
     }
 
@@ -48,7 +50,7 @@ public class TestFileTreeFactory {
         return this.construct(cloudUser.getUserId() );
     }
 
-    public TestFileTree constructDefault(String userId) {
+    public TestFileTree constructDefault(UUID userId) {
         var testTree = new TestFileTree(userId, testQueries);
         testTree.addFromCsv( defaultTree );
         return testTree;

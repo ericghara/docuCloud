@@ -10,6 +10,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
+import java.util.UUID;
 
 @RequiredArgsConstructor
 @Builder
@@ -18,8 +19,7 @@ import java.util.Collection;
 @Getter
 public class CloudUser implements UserDetails {
 
-    @NonNull
-    private final String userId;
+    private final UUID userId;
     @NonNull
     private final  String username;
     private final String email;

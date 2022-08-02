@@ -26,7 +26,7 @@ public class JwtToAuthenticationTokenConverter implements Converter<Jwt, Mono<Ab
     @Override
     public Mono<AbstractAuthenticationToken> convert(Jwt source) {
         CloudUser CloudUser= jwtCloudUserConverter.convert(source);
-        Collection<GrantedAuthority> authorities = extractAuthorities( source, CloudUser.getUserId() );
+        Collection<GrantedAuthority> authorities = extractAuthorities( source, CloudUser.getUserId().toString() );
         return Mono.just(new UsernamePasswordAuthenticationToken( jwtCloudUserConverter.convert(source),
                 "n/a", authorities) );
     }

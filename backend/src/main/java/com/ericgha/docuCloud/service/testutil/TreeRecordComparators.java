@@ -2,6 +2,8 @@ package com.ericgha.docuCloud.service.testutil;
 
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 
+import java.util.UUID;
+
 public class TreeRecordComparators {
 
     static public int compareByLtree(TreeRecord a, TreeRecord b) {
@@ -11,8 +13,8 @@ public class TreeRecordComparators {
     }
 
     static public int compareByObjectId(TreeRecord a, TreeRecord b) {
-        String idA = a.getObjectId();
-        String idB = b.getObjectId();
+        UUID idA = a.getObjectId();
+        UUID idB = b.getObjectId();
         return idA.compareTo(idB);
     }
 }

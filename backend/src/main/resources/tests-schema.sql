@@ -4,13 +4,14 @@
 ;DROP TABLE IF EXISTS tree CASCADE; DROP TYPE IF EXISTS OBJECT_TYPE;
 ;CREATE TYPE OBJECT_TYPE AS enum('ROOT','DIR', 'FILE');
 ;CREATE TABLE IF NOT EXISTS public.tree (
-	object_id varchar(36) NOT NULL PRIMARY KEY DEFAULT uuid_generate_v4(),
+	object_id uuid NOT NULL PRIMARY KEY DEFAULT uuid_generate_v4(),
 	object_type object_type NOT NULL,
 	PATH ltree NOT NULL,
-	user_id varchar(36) NOT NULL,
+	user_id uuid NOT NULL,
 	created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	unique(user_id, path)
 );
+;CREATE INDEX IF NOT EXISTS tree_path_idx on tree using gist (path);
 
 --create or replace function insCheck() RETURNS trigger AS $$
 --begin
