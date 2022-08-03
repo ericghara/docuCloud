@@ -12,6 +12,7 @@ import org.jooq.Record6;
 import org.jooq.ResultQuery;
 import org.jooq.SelectConditionStep;
 import org.jooq.postgres.extensions.types.Ltree;
+import org.reactivestreams.Publisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -19,7 +20,6 @@ import reactor.core.publisher.Mono;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
-import java.util.concurrent.Flow;
 
 import static com.ericgha.docuCloud.jooq.Routines.*;
 import static com.ericgha.docuCloud.jooq.Tables.TREE;
@@ -98,25 +98,7 @@ public class TreeService {
                 .map( (Number o) -> o.longValue() );
     }
 
-    @Transactional
-    public Flux<Record3<UUID, UUID, ObjectType>> cpDir(Ltree destination, TreeRecord sourceRecord, CloudUser cloudUser) {
-        if (sourceRecord.getObjectType() != ObjectType.DIR) {
-            return Flux.empty();
-        }
-        var copyCte = name( "copy_records" ).fields("source_id", "object_id", "object_type",
-                "path", "user_id", "created_at").as( copySubTreeForInsert( destination, sourceRecord, cloudUser ) );
-        var insertCte = name( "insert_res" ).as(
-                dsl.insertInto( TREE )
-                        .select( dsl.select( copyCte.fields( "object_id", "object_type",
-                                "path", "user_id", "created_at" ) ).from( copyCte ) )
-                        .returning(TREE.OBJECT_ID));
-        return Flux.from( dsl.with(copyCte).with(insertCte).select( copyCte.field( "source_id", UUID.class ),
-                    copyCte.field( "object_id", UUID.class ).as("destination_id"),
-                    copyCte.field( "object_type", ObjectType.class ) )
-                .from( copyCte ) );
-    }
-
-    public Flow.Publisher<Record3<UUID,UUID,ObjectType>> cpCommon(
+    Publisher<Record3<UUID,UUID,ObjectType>> cpCommon(
             SelectConditionStep<Record6<UUID, UUID, ObjectType, Ltree, UUID, OffsetDateTime>> selectRecordCopies) {
         var copyCte = name( "copy_records" ).fields("source_id", "object_id", "object_type",
                 "path", "user_id", "created_at").as( selectRecordCopies );
@@ -131,9 +113,28 @@ public class TreeService {
                 .from( copyCte );
     }
 
+    @Transactional
+    public Flux<Record3<UUID, UUID, ObjectType>> cpDir(Ltree destination, TreeRecord sourceRecord, CloudUser cloudUser) {
+        if (sourceRecord.getObjectType() != ObjectType.DIR) {
+            return Flux.empty();
+        }
+        var selectRecordCopies =  fetchDirCopyRecords( destination, sourceRecord, cloudUser );
+        return Flux.from(cpCommon( selectRecordCopies ) );
+    }
+
+    @Transactional
+    // Returning ObjectType is a compromise for code usability with cpDir, it will of course always be ObjectType.FILE
+    public Mono<Record3<UUID,UUID, ObjectType>> cpFile(Ltree destination, TreeRecord sourceRecord, CloudUser cloudUser) {
+        if (sourceRecord.getObjectType() != ObjectType.FILE) {
+            return Mono.empty();
+        }
+        var selectRecordCopies = fetchFileCopyRecords( destination, sourceRecord, cloudUser );
+        return Mono.from( cpCommon(selectRecordCopies) );
+    }
+
     // Does not includes self (parent)
     // Creates new uuid and new timestamp, and converts path, other fields remain the same;
-SelectConditionStep<Record6<UUID, UUID, ObjectType, Ltree, UUID, OffsetDateTime>> copySubTreeForInsert(
+SelectConditionStep<Record6<UUID, UUID, ObjectType, Ltree, UUID, OffsetDateTime>> fetchDirCopyRecords(
             Ltree destination, TreeRecord sourceRecord, CloudUser cloudUser) {
         CommonTableExpression<Record2<Ltree, Integer>> oldPathCte = name( "oldPath" ).fields( "path", "level" )
                 .as( selectDirPathAndLevel( sourceRecord, cloudUser ) );
@@ -149,7 +150,7 @@ SelectConditionStep<Record6<UUID, UUID, ObjectType, Ltree, UUID, OffsetDateTime>
                         ltreeIsparent( oldPathCte.field( "path", Ltree.class ), TREE.PATH ) ) );
     }
 
-    SelectConditionStep<Record6<UUID, UUID, ObjectType, Ltree, UUID, OffsetDateTime>> copyFileForInsert(
+    SelectConditionStep<Record6<UUID, UUID, ObjectType, Ltree, UUID, OffsetDateTime>> fetchFileCopyRecords(
             Ltree destination, TreeRecord sourceRecord, CloudUser cloudUser) {
         return dsl.select(
                         TREE.OBJECT_ID.as( "source_id" ),
@@ -160,29 +161,4 @@ SelectConditionStep<Record6<UUID, UUID, ObjectType, Ltree, UUID, OffsetDateTime>
                         .and( TREE.USER_ID.eq( cloudUser.getUserId() ) )
                         .and(TREE.OBJECT_TYPE.eq(ObjectType.FILE) ) );
     }
-
-        @Transactional
-    public Mono<Record2<UUID,UUID>> cpFile(Ltree destination, TreeRecord sourceRecord, CloudUser cloudUser) {
-        if (sourceRecord.getObjectType() != ObjectType.FILE) {
-            return Mono.empty();
-        }
-        var copyCte = name( "copy_record" )
-                .fields("source_id", "object_id", "object_type",
-                        "path", "user_id", "created_at" )
-                .as( copyFileForInsert( destination, sourceRecord, cloudUser ) );
-        var insertCte = name( "insert_res" ).as(
-                dsl.insertInto( TREE )
-                        .select( dsl.select( copyCte.fields( "object_id", "object_type",
-                                "path", "user_id", "created_at" ) ).from( copyCte ) )
-                        .returning(TREE.OBJECT_ID));
-        return Mono.from( dsl.with( copyCte ).with(insertCte).insertInto( TREE ).select( copyCte ) )
-                .map( Number::longValue );
-    }
-
-
-//    // Does not include self (parent) in results
-//   SelectConditionStep<TreeRecord> selectChildren(TreeRecord treeRecord, CloudUser cloudUser) {
-//        return selectChildrenAndParent( treeRecord, cloudUser )
-//                .and( DSL.val( treeRecord.getPath() ).notEqual( TREE.PATH ) );
-//    }
 }

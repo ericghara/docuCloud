@@ -57,17 +57,17 @@ class TreeServiceTest {
 
     @PostConstruct
     void postConstruct() {
-        TreeTestQueries treeTestQueries =  new TreeTestQueries( dsl );
+        TreeTestQueries treeTestQueries = new TreeTestQueries( dsl );
         treeFactory = new TestFileTreeFactory( treeTestQueries );
     }
 
     CloudUser user0 = CloudUser.builder()
-            .userId( UUID.fromString("1234567-89ab-cdef-fedc-ba9876543210" ) )
+            .userId( UUID.fromString( "1234567-89ab-cdef-fedc-ba9876543210" ) )
             .username( "unitTester" )
             .realm( "cloud9" ).build();
 
     CloudUser user1 = CloudUser.builder()
-            .userId( UUID.fromString("fffffff-ffff-ffff-fedc-ba9876543210" ) )
+            .userId( UUID.fromString( "fffffff-ffff-ffff-fedc-ba9876543210" ) )
             .username( "unitTester" )
             .realm( "cloud9" ).build();
 
@@ -100,7 +100,7 @@ class TreeServiceTest {
     void selectMovePaths() {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         // a "challenge" tree with same paths but different user
-        TestFileTree tree1 = treeFactory.constructDefault(user1 );
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
         TreeRecord toMove = tree0.getOrigRecord( "dir0" );
         String newBase = "newBase";
@@ -122,11 +122,11 @@ class TreeServiceTest {
     }
 
     @Test
-    @DisplayName( "Creates the expected record" )
+    @DisplayName("Creates the expected record")
     void create() {
         TreeRecord record = new TreeRecord( null, ObjectType.ROOT,
                 Ltree.valueOf( "" ), null, null );
-        OffsetDateTime currentTime = Mono.from(dsl.select(currentOffsetDateTime() ) ).block().component1();
+        OffsetDateTime currentTime = Mono.from( dsl.select( currentOffsetDateTime() ) ).block().component1();
         // returns correct record
         TreeRecord newRecord = treeService.create( record, user0 ).block();
         assertNotNull( newRecord.getObjectId() );
@@ -143,104 +143,104 @@ class TreeServiceTest {
     }
 
     @Test
-    @DisplayName( "Test of file move" )
+    @DisplayName("Test of file move")
     void mvFileMovesAFile() {
-        TestFileTree tree0 = treeFactory.constructDefault(user0 );
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
         TreeRecord beforeMove = tree0.getOrigRecord( "dir0.dir3.file1" );
         Ltree newPath = Ltree.valueOf( "dir0.dir1.file1" );
         Long rowsChanged = treeService.mvFile( newPath, beforeMove, user0 ).block();
-        assertEquals(1, rowsChanged, "Unexpected number of rows changed by move");
+        assertEquals( 1, rowsChanged, "Unexpected number of rows changed by move" );
         TreeRecord afterMove = tree0.fetchCurRecord( beforeMove );
-        assertEquals(beforeMove.getObjectType(), afterMove.getObjectType() );
+        assertEquals( beforeMove.getObjectType(), afterMove.getObjectType() );
         assertEquals( beforeMove.getCreatedAt(), afterMove.getCreatedAt() );
         assertEquals( beforeMove.getUserId(), afterMove.getUserId() );
         assertEquals( newPath, afterMove.getPath() );
-        assertNoChanges(tree1);
+        assertNoChanges( tree1 );
         assertNoChangesFor( tree0, "", "dir0", "file0",
                 "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3" );
     }
+
     @Test
-    @DisplayName( "mvFile does not move a dir spoofed as file" )
+    @DisplayName("mvFile does not move a dir spoofed as file")
     void mvFileDoesNotMoveDir() {
-        TestFileTree tree0 = treeFactory.constructDefault(user0 );
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
         TreeRecord spoofedRecord = tree0.getOrigRecord( "dir0.dir1.dir2" );
         spoofedRecord.setObjectType( ObjectType.FILE ); // force db to handle objectType check;
-        Ltree newPath = Ltree.valueOf("dir0.dir3.dir2");
-        Long rowsChanged = treeService.mvFile( newPath, spoofedRecord, user0).block();
+        Ltree newPath = Ltree.valueOf( "dir0.dir3.dir2" );
+        Long rowsChanged = treeService.mvFile( newPath, spoofedRecord, user0 ).block();
 
-        assertEquals(0, rowsChanged, "Unexpected number of rows changed by move");
-        assertNoChanges(tree0);
-        assertNoChanges(tree1);
+        assertEquals( 0, rowsChanged, "Unexpected number of rows changed by move" );
+        assertNoChanges( tree0 );
+        assertNoChanges( tree1 );
     }
 
 
-
     @Test
-    @DisplayName( "mvDir correctly renames target dir and updates child dirs" )
+    @DisplayName("mvDir correctly renames target dir and updates child dirs")
     void mvDirRenamesDirAndChildren() {
-        TestFileTree tree0 = treeFactory.constructDefault(user0 );
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
         TreeRecord curDir = tree0.getOrigRecord( "dir0" );
-        Ltree newName = Ltree.valueOf("dir100");
+        Ltree newName = Ltree.valueOf( "dir100" );
 
-        Mono<Long> rename = treeService.mvDir( newName,  curDir, user0 );
+        Mono<Long> rename = treeService.mvDir( newName, curDir, user0 );
         StepVerifier.create( rename )
                 .expectNext( 5L )
                 .verifyComplete();
 
-        for (String path : List.of("dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1") ) {
-            String expectedNewPath = path.replace("dir0", "dir100");
+        for (String path : List.of( "dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" )) {
+            String expectedNewPath = path.replace( "dir0", "dir100" );
             TreeRecord expectedNewRecord = tree0.getOrigRecord( path );
             expectedNewRecord.setPath( Ltree.valueOf( expectedNewPath ) );
-            assertEquals(expectedNewRecord, tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
+            assertEquals( expectedNewRecord, tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
         }
         assertNoChangesFor( tree0, "", "file0" );
-        assertNoChanges(tree1);
+        assertNoChanges( tree1 );
     }
 
     @Test
-    @DisplayName( "Rename correctly renames target dir and updates child dirs" )
+    @DisplayName("Rename correctly renames target dir and updates child dirs")
     void renameDirWithChildren() {
-        TestFileTree tree0 = treeFactory.constructDefault(user0 );
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
         TreeRecord curDir = tree0.getOrigRecord( "dir0" );
-        Ltree newName = Ltree.valueOf("dir100");
+        Ltree newName = Ltree.valueOf( "dir100" );
 
-        Mono<Long> rename = treeService.mvDir( newName,  curDir, user0 );
+        Mono<Long> rename = treeService.mvDir( newName, curDir, user0 );
         StepVerifier.create( rename )
                 .expectNext( 5L )
                 .verifyComplete();
 
-        for (String path : List.of("dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1") ) {
-            String expectedNewPath = path.replace("dir0", "dir100");
+        for (String path : List.of( "dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" )) {
+            String expectedNewPath = path.replace( "dir0", "dir100" );
             TreeRecord expectedNewRecord = tree0.getOrigRecord( path );
             expectedNewRecord.setPath( Ltree.valueOf( expectedNewPath ) );
-            assertEquals(expectedNewRecord, tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
+            assertEquals( expectedNewRecord, tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
         }
         assertNoChangesFor( tree0, "", "file0" );
-        assertNoChanges(tree1);
+        assertNoChanges( tree1 );
     }
 
 
     @Test
-    @DisplayName( "mvDir moves a dir and children to another branch" )
+    @DisplayName("mvDir moves a dir and children to another branch")
     void mvDirMovesDirAndChildren() {
-        TestFileTree tree0 = treeFactory.constructDefault(user0 );
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
         TreeRecord origRecord = tree0.getOrigRecord( "dir0.dir3" );
-        Ltree movePath = Ltree.valueOf("dir0.dir1.dir2.dir3");
+        Ltree movePath = Ltree.valueOf( "dir0.dir1.dir2.dir3" );
 
         Mono<Long> move = treeService.mvDir( movePath, origRecord, user0 );
 
@@ -248,26 +248,26 @@ class TreeServiceTest {
                 .expectNext( 2L )
                 .verifyComplete();
 
-        for (String path : List.of("dir0.dir3", "dir0.dir3.file1") ) {
-            String expectedNewPath = path.replace("dir0.dir3", "dir0.dir1.dir2.dir3");
+        for (String path : List.of( "dir0.dir3", "dir0.dir3.file1" )) {
+            String expectedNewPath = path.replace( "dir0.dir3", "dir0.dir1.dir2.dir3" );
             TreeRecord expectedNewRecord = tree0.getOrigRecord( path );
             expectedNewRecord.setPath( Ltree.valueOf( expectedNewPath ) );
-            assertEquals(expectedNewRecord, tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
+            assertEquals( expectedNewRecord, tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
         }
         assertNoChangesFor( tree0, "", "dir0", "file0", "dir0.dir1", "dir0.dir1.dir2" );
-        assertNoChanges(tree1);
+        assertNoChanges( tree1 );
     }
 
     @Test
-    @DisplayName( "mvDir doesn't move a spoofed file" )
+    @DisplayName("mvDir doesn't move a spoofed file")
     void mvDirDoesNotMoveFileSpoofedAsDir() {
-        TestFileTree tree0 = treeFactory.constructDefault(user0 );
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
         TreeRecord origRecord = tree0.getOrigRecord( "dir0.dir3.file1" );
         origRecord.setObjectType( ObjectType.DIR ); // spoofed object type;
-        Ltree movePath = Ltree.valueOf("file1");
+        Ltree movePath = Ltree.valueOf( "file1" );
 
         Mono<Long> move = treeService.mvDir( movePath, origRecord, user0 );
 
@@ -275,72 +275,139 @@ class TreeServiceTest {
                 .expectNext( 0L )
                 .verifyComplete();
 
-        assertNoChanges(tree0);
-        assertNoChanges(tree1);
+        assertNoChanges( tree0 );
+        assertNoChanges( tree1 );
     }
 
     @Test
-    @DisplayName("copySubTreeForInsert generates new object_id, path and created_at")
-    void copySubTreeForInsertGeneratesExpectedRecords() {
+    @DisplayName("fetchDirCopyRecords generates new object_id, path and created_at")
+    void fetchDirCopyRecordsGeneratesExpectedRecords() {
         // moves dir0.dir3 => dir0.dir2.dir2.dir3
-        TestFileTree tree0 = treeFactory.constructDefault(user0 );
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
         TreeRecord source = tree0.getOrigRecord( "dir0.dir3" );
-        Ltree destination = Ltree.valueOf("dir0.dir1.dir2.dir3");
+        Ltree destination = Ltree.valueOf( "dir0.dir1.dir2.dir3" );
         // raw type for brevity here...
-        Map<String, ? extends Record6> copyRecordsByPath = Flux.from(treeService.copySubTreeForInsert( destination, source, user0 ) )
-                .collectMap( r -> r.get(TREE.PATH).data() ).block();
+        Map<String, ? extends Record6> copyRecordsByPath = Flux.from( treeService.fetchDirCopyRecords( destination, source, user0 ) )
+                .collectMap( r -> r.get( TREE.PATH ).data() ).block();
 
         TreeRecord origDir3 = tree0.getOrigRecord( "dir0.dir3" );
         var curDir3 = copyRecordsByPath.get( destination.data() );
-        assertNotEquals(origDir3.getObjectId(), curDir3.get(TREE.OBJECT_ID));
-        assertEquals( origDir3.getObjectType(), curDir3.get(TREE.OBJECT_TYPE ) );
-        assertEquals( origDir3.getUserId(), curDir3.get(TREE.USER_ID) );
-        assertTrue(origDir3.get(TREE.CREATED_AT).isBefore(curDir3.get(TREE.CREATED_AT) ) );
+        assertNotEquals( origDir3.getObjectId(), curDir3.get( TREE.OBJECT_ID ) );
+        assertEquals( origDir3.getObjectType(), curDir3.get( TREE.OBJECT_TYPE ) );
+        assertEquals( origDir3.getUserId(), curDir3.get( TREE.USER_ID ) );
+        assertTrue( origDir3.get( TREE.CREATED_AT ).isBefore( curDir3.get( TREE.CREATED_AT ) ) );
 
         TreeRecord origFile1 = tree0.getOrigRecord( "dir0.dir3.file1" );
-        var curFile1 = copyRecordsByPath.get(destination.data() + ".file1" );
-        assertNotEquals(origFile1.getObjectId(), curFile1.get(TREE.OBJECT_ID));
-        assertEquals( origFile1.getObjectType(), curFile1.get(TREE.OBJECT_TYPE ) );
-        assertEquals( origFile1.getUserId(), curFile1.get(TREE.USER_ID) );
-        assertTrue(origFile1.get(TREE.CREATED_AT).isBefore(curFile1.get(TREE.CREATED_AT) ) );
+        var curFile1 = copyRecordsByPath.get( destination.data() + ".file1" );
+        assertNotEquals( origFile1.getObjectId(), curFile1.get( TREE.OBJECT_ID ) );
+        assertEquals( origFile1.getObjectType(), curFile1.get( TREE.OBJECT_TYPE ) );
+        assertEquals( origFile1.getUserId(), curFile1.get( TREE.USER_ID ) );
+        assertTrue( origFile1.get( TREE.CREATED_AT ).isBefore( curFile1.get( TREE.CREATED_AT ) ) );
 
         // this is just the creation of records *to* insert, so not mutating
-        assertNoChanges(tree0);
+        assertNoChanges( tree0 );
+    }
+    
+    @Test
+    @DisplayName("fetchDirCopyRecords does not return records when ObjectType is spoofed")
+    void fetchDirCopyRecordsDoesNotFetchSpoofedObjectType() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        TreeRecord source = tree0.getOrigRecord( "dir0.dir3.file1" );
+        source.setObjectType( ObjectType.DIR );
+        Ltree destination = Ltree.valueOf( "dir0.dir1.dir2.dir3" );
+        StepVerifier.create(treeService.fetchDirCopyRecords( destination, source, user0 ) )
+                .expectNextCount( 0 ).verifyComplete();
+    }
+
+    @Test
+    @DisplayName("fetchDirCopyRecords does not fetch when incorrect user_id")
+    void fetchDirCopyRecordsDoesNotFetchWhenIncorrectUserId() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        TreeRecord source = tree0.getOrigRecord( "dir0.dir3" );
+        Ltree destination = Ltree.valueOf( "dir0.dir1.dir2.dir3" );
+        StepVerifier.create(treeService.fetchDirCopyRecords( destination, source, user1 ) )
+                .expectNextCount( 0 ).verifyComplete();
     }
 
     @Test
     @DisplayName("cpDir copies a dir and its children")
     void cpDirCopiesDirAndChildern() {
-        TestFileTree tree0 = treeFactory.constructDefault(user0 );
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
         String srcPathStr = "dir0";
         String destPathSr = "dir100";
-        TreeRecord source = tree0.getOrigRecord(srcPathStr);
+        TreeRecord source = tree0.getOrigRecord( srcPathStr );
         Ltree destination = Ltree.valueOf( destPathSr );
 
-        Set<String> expectedPaths = Set.of("dir100", "dir100.dir1", "dir100.dir1.dir2", "dir100.dir3", "dir100.dir3.file1");
+        Set<String> expectedPaths = Set.of( "dir100", "dir100.dir1", "dir100.dir1.dir2", "dir100.dir3", "dir100.dir3.file1" );
 
-        List<Record3<UUID,UUID,ObjectType>> copy = treeService.cpDir(destination, source, user0).collectList().block();
+        List<Record3<UUID, UUID, ObjectType>> copy = treeService.cpDir( destination, source, user0 ).collectList().block();
 
-        for (Record3<UUID,UUID,ObjectType> record : copy) {
-            TreeRecord srcRec = tree0.fetchCurRecord( record.get("source_id", UUID.class) );
-            TreeRecord cpRec = tree0.fetchCurRecord( record.get("destination_id", UUID.class) );
-            String destFromSrc = srcRec.getPath().data().replace(srcPathStr, destPathSr);
+        for (Record3<UUID, UUID, ObjectType> record : copy) {
+            TreeRecord srcRec = tree0.fetchCurRecord( record.get( "source_id", UUID.class ) );
+            TreeRecord cpRec = tree0.fetchCurRecord( record.get( "destination_id", UUID.class ) );
+            String destFromSrc = srcRec.getPath().data().replace( srcPathStr, destPathSr );
             assertEquals( destFromSrc, cpRec.getPath().data() );
-            assertTrue( record.get("object_type") == srcRec.getObjectType()
+            assertTrue( record.get( "object_type" ) == srcRec.getObjectType()
                     && srcRec.getObjectType() == cpRec.getObjectType() );
         }
 
         Map<Boolean, List<String>> recordsByNew = tree0.fetchAllUserObjects()
-                .stream().map(TreeRecord::getPath)
-                .map(Ltree::data)
+                .stream().map( TreeRecord::getPath )
+                .map( Ltree::data )
                 .collect( Collectors.partitioningBy( expectedPaths::contains ) );
 
-        assertNoChangesFor( tree0, recordsByNew.get(false).toArray(new String[0]) );
-        assertTrue(expectedPaths.containsAll( recordsByNew.get(true) ) );
-        assertEquals(expectedPaths.size(), recordsByNew.get(true).size() );
-        assertNoChanges(tree1);
+        assertNoChangesFor( tree0, recordsByNew.get( false ).toArray( new String[0] ) );
+        assertTrue( expectedPaths.containsAll( recordsByNew.get( true ) ) );
+        assertEquals( expectedPaths.size(), recordsByNew.get( true ).size() );
+        assertNoChanges( tree1 );
+    }
+
+    @Test
+    @DisplayName("fetch CopyFileRecords produces the correct record")
+    void fetchCopyFileRecordsProducesCorrectRecord() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        String srcStr = "dir0.dir3.file1";
+        String destStr = "dir0.file100";
+        TreeRecord srcRecord = tree0.getOrigRecord( srcStr );
+        var record = Mono.from(
+                treeService.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord, user0 ) )
+                .block();
+
+        assertEquals( srcRecord.get(TREE.OBJECT_ID), record.get("source_id") );
+        assertNotEquals( srcRecord.get(TREE.OBJECT_ID), record.get(TREE.OBJECT_ID) );
+        assertEquals( ObjectType.FILE, record.get(TREE.OBJECT_TYPE) );
+        assertEquals( record.get(TREE.PATH), Ltree.valueOf(destStr) );
+        assertEquals( record.get(TREE.USER_ID), user0.getUserId() );
+        assertTrue( record.get(TREE.CREATED_AT).isAfter( srcRecord.get(TREE.CREATED_AT) ) );
+    }
+
+    @Test
+    @DisplayName("fetch CopyFileRecords does not fetch another users records")
+    void fetchCopyFileRecordsDoesNotFetchAnotherUsersRecords() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        String srcStr = "dir0.dir3.file1";
+        String destStr = "dir0.file100";
+        TreeRecord srcRecord = tree0.getOrigRecord( srcStr );
+        StepVerifier.create( treeService.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord, user1 ) )
+                .expectNextCount( 0 )
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("cpFile returns Mono.empty() when ObjectType is spoofed")
+    void cpFileReturnsMonoEmptyWhenIncorrectObjectType() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        String srcStr = "dir0.dir1";
+        String destStr = "dir0.file100";
+        TreeRecord srcRecord = tree0.getOrigRecord( srcStr );
+        srcRecord.setObjectType( ObjectType.FILE ); // spoofed object type
+        var record = Mono.from(
+                        treeService.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord, user0 ) );
+        StepVerifier.create( record ).expectNextCount( 0 ).verifyComplete();
     }
 
 
