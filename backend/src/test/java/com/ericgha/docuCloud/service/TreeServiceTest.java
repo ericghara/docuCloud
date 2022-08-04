@@ -17,6 +17,8 @@ import org.jooq.postgres.extensions.types.Ltree;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import reactor.core.publisher.Flux;
@@ -35,6 +37,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.ericgha.docuCloud.jooq.Tables.TREE;
 import static com.ericgha.docuCloud.service.testutil.assertion.TestFileTreeAssertions.assertNoChanges;
@@ -307,7 +310,7 @@ class TreeServiceTest {
         // this is just the creation of records *to* insert, so not mutating
         assertNoChanges( tree0 );
     }
-    
+
     @Test
     @DisplayName("fetchDirCopyRecords does not return records when ObjectType is spoofed")
     void fetchDirCopyRecordsDoesNotFetchSpoofedObjectType() {
@@ -315,7 +318,7 @@ class TreeServiceTest {
         TreeRecord source = tree0.getOrigRecord( "dir0.dir3.file1" );
         source.setObjectType( ObjectType.DIR );
         Ltree destination = Ltree.valueOf( "dir0.dir1.dir2.dir3" );
-        StepVerifier.create(treeService.fetchDirCopyRecords( destination, source, user0 ) )
+        StepVerifier.create( treeService.fetchDirCopyRecords( destination, source, user0 ) )
                 .expectNextCount( 0 ).verifyComplete();
     }
 
@@ -326,7 +329,7 @@ class TreeServiceTest {
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
         TreeRecord source = tree0.getOrigRecord( "dir0.dir3" );
         Ltree destination = Ltree.valueOf( "dir0.dir1.dir2.dir3" );
-        StepVerifier.create(treeService.fetchDirCopyRecords( destination, source, user1 ) )
+        StepVerifier.create( treeService.fetchDirCopyRecords( destination, source, user1 ) )
                 .expectNextCount( 0 ).verifyComplete();
     }
 
@@ -373,15 +376,15 @@ class TreeServiceTest {
         String destStr = "dir0.file100";
         TreeRecord srcRecord = tree0.getOrigRecord( srcStr );
         var record = Mono.from(
-                treeService.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord, user0 ) )
+                        treeService.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord, user0 ) )
                 .block();
 
-        assertEquals( srcRecord.get(TREE.OBJECT_ID), record.get("source_id") );
-        assertNotEquals( srcRecord.get(TREE.OBJECT_ID), record.get(TREE.OBJECT_ID) );
-        assertEquals( ObjectType.FILE, record.get(TREE.OBJECT_TYPE) );
-        assertEquals( record.get(TREE.PATH), Ltree.valueOf(destStr) );
-        assertEquals( record.get(TREE.USER_ID), user0.getUserId() );
-        assertTrue( record.get(TREE.CREATED_AT).isAfter( srcRecord.get(TREE.CREATED_AT) ) );
+        assertEquals( srcRecord.get( TREE.OBJECT_ID ), record.get( "source_id" ) );
+        assertNotEquals( srcRecord.get( TREE.OBJECT_ID ), record.get( TREE.OBJECT_ID ) );
+        assertEquals( ObjectType.FILE, record.get( TREE.OBJECT_TYPE ) );
+        assertEquals( record.get( TREE.PATH ), Ltree.valueOf( destStr ) );
+        assertEquals( record.get( TREE.USER_ID ), user0.getUserId() );
+        assertTrue( record.get( TREE.CREATED_AT ).isAfter( srcRecord.get( TREE.CREATED_AT ) ) );
     }
 
     @Test
@@ -406,126 +409,145 @@ class TreeServiceTest {
         TreeRecord srcRecord = tree0.getOrigRecord( srcStr );
         srcRecord.setObjectType( ObjectType.FILE ); // spoofed object type
         var record = Mono.from(
-                        treeService.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord, user0 ) );
+                treeService.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord, user0 ) );
         StepVerifier.create( record ).expectNextCount( 0 ).verifyComplete();
     }
 
+    @Test
+    @DisplayName("selectDescendents returns UUIDs of descendents")
+    void selectDescendentsReturnsDescendents() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        List<UUID> expected = List.of( "dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" )
+                .stream()
+                .map( pathStr -> tree0.getOrigRecord( pathStr ) )
+                .map( TreeRecord::getObjectId )
+                .sorted()
+                .toList();
+        Flux<UUID> found = Flux.from( treeService.selectDescendents( tree0.getOrigRecord( "dir0" ), user0 ) )
+                .map( rec -> rec.get( TREE.OBJECT_ID ) )
+                .sort();
+        StepVerifier.create( found )
+                .expectNextSequence( expected )
+                .verifyComplete();
+    }
 
-//    @Test
-//    @DisplayName("Config check: UNIQUE path")
-//    void uniqueConstraintPath() {
-//        Flux<TreeRecord> records = Flux.concat( treeService.create( "a", ObjectType.ROOT ),
-//                treeService.create( "a", ObjectType.ROOT ) );
-//        StepVerifier.create( records ).expectNextCount( 1 )
-//                .expectError( DataAccessException.class )
-//                .verify();
-//    }
-//
-//    @Test
-//    @DisplayName("Insert trigger: ROOT level must equal 1")
-//    void rootInsTrigger() {
-//        Mono<TreeRecord> level0 = Mono.from( treeService.create( "", ObjectType.ROOT ) );
-//        StepVerifier.create( level0 ).verifyError( DataAccessException.class );
-//        Mono<TreeRecord> level1 = Mono.from( treeService.create( "a", ObjectType.ROOT ) );
-//        StepVerifier.create( level1 ).expectNextCount( 1 ).verifyComplete();
-//        Mono<TreeRecord> level2 = Mono.from( treeService.create( "a.b", ObjectType.ROOT ) );
-//        StepVerifier.create( level2 ).verifyError( DataAccessException.class );
-//    }
-//
-//    @Test
-//    @DisplayName("Insert trigger: DIR or FILE prevent path level < 2")
-//    void dirFileInsTriggerLevel() {
-//        Mono<TreeRecord> level1Dir = Mono.from( treeService.create( "rootlevel", ObjectType.DIR ) );
-//        StepVerifier.create( level1Dir ).verifyError( DataAccessException.class );
-//
-//        Mono<TreeRecord> level1File = Mono.from( treeService.create( "rootlevel", ObjectType.FILE ) );
-//        StepVerifier.create( level1File ).verifyError( DataAccessException.class );
-//    }
-//
-//    @Test
-//    @DisplayName("Insert trigger: DIR and File orphan constraints")
-//    void DirFileInsTriggerOrphan() {
-//        // without parent
-//        Mono<TreeRecord> orphanLevel2Dir = Mono.from( treeService.create( "rootlevel.folder", ObjectType.DIR ) );
-//        StepVerifier.create( orphanLevel2Dir ).verifyError( DataAccessException.class );
-//
-//        Mono<TreeRecord> orphanLevel2File = Mono.from( treeService.create( "rootlevel.file", ObjectType.FILE ) );
-//        StepVerifier.create( orphanLevel2File ).verifyError( DataAccessException.class );
-//
-//        // now add the parent
-//        Mono.from( treeService.create( "rootlevel", ObjectType.ROOT ) ).block();
-//
-//        Mono<TreeRecord> parentedLevel2Dir = Mono.from( treeService.create( "rootlevel.folder", ObjectType.DIR ) );
-//        StepVerifier.create( parentedLevel2Dir ).expectNextCount( 1 ).verifyComplete();
-//
-//        Mono<TreeRecord> parentedLevel2File = Mono.from( treeService.create( "rootlevel.file", ObjectType.FILE ) );
-//        StepVerifier.create( parentedLevel2File ).expectNextCount( 1 ).verifyComplete();
-//    }
-//
-//    @Test
-//    @DisplayName("Update leaves_no_orphans trigger")
-//    void updateLeavesNoOrphans() {
-//        String rootId = treeService.create( "root", ObjectType.ROOT ).block().getObjectId();
-//        String dirId = treeService.create( "root.dir", ObjectType.DIR ).block().getObjectId();
-//        String subDirId = treeService.create( "root.dir.subDir", ObjectType.DIR ).block().getObjectId();
-//
-//        Mono<TreeRecord> rootFail = treeService.updatePath( rootId, "newRoot" );
-//        StepVerifier.create( rootFail ).verifyError( DataAccessException.class );
-//
-//        Mono<TreeRecord> dirFail = treeService.updatePath( dirId, "root.newDir" );
-//        StepVerifier.create( dirFail ).verifyError( DataAccessException.class );
-//    }
-//
-//    @Test
-//    void select() {
-//        TreeRecord record = treeService.select( "user0" ).block();
-//        System.out.println( record );
-//    }
-//
-//    @Test
-//    void fetchPath() {
-//    }
-//
-//    @Test
-//    void selectChildren() {
-//        List<TreeRecord> family = List.of(
-//                TreeRecordFactory.createFromPathStr( "r0", "r0", ObjectType.ROOT ),
-//                TreeRecordFactory.createFromPathStr( "r0.d1", "r0.d1", ObjectType.DIR ),
-//                TreeRecordFactory.createFromPathStr( "r0.d2", "r0.d2", ObjectType.DIR ),
-//                TreeRecordFactory.createFromPathStr( "r0.d1.f1", "r0.d1.f1", ObjectType.FILE ) );
-//        List<TreeRecord> dummies = List.of(
-//                TreeRecordFactory.createFromPathStr( "r1", "r1", ObjectType.ROOT ),
-//                TreeRecordFactory.createFromPathStr( "r1.d1", "r1.d1", ObjectType.DIR ),
-//                TreeRecordFactory.createFromPathStr( "r1.d2", "r1.d2", ObjectType.DIR ),
-//                TreeRecordFactory.createFromPathStr( "r1.d1.f1", "r1.d1.f1", ObjectType.FILE )
-//        );
-//        Flux.fromStream( Stream.concat( family.stream(), dummies.stream() ) )
-//                .flatMapSequential( treeService::create, 1 ) // sequential required for concurrency of 1, but...
-//                .blockLast();
-//        List<TreeRecord> expected = family.subList( 1, family.size() );
-//        Flux<TreeRecord> found = treeService
-//                .selectChildren( Ltree.valueOf( "r0" ) );
-//        StepVerifier.create( found ).expectNextSequence( expected ).verifyComplete();
-//    }
-//
-//    @Test
-//    void selectChildrenAndParent() {
-//        List<TreeRecord> expected = List.of(
-//                TreeRecordFactory.createFromPathStr( "r0", "r0", ObjectType.ROOT ),
-//                TreeRecordFactory.createFromPathStr( "r0.d1", "r0.d1", ObjectType.DIR ),
-//                TreeRecordFactory.createFromPathStr( "r0.d2", "r0.d2", ObjectType.DIR ),
-//                TreeRecordFactory.createFromPathStr( "r0.d1.f1", "r0.d1.f1", ObjectType.FILE ) );
-//        List<TreeRecord> dummies = List.of(
-//                TreeRecordFactory.createFromPathStr( "r1", "r1", ObjectType.ROOT ),
-//                TreeRecordFactory.createFromPathStr( "r1.d1", "r1.d1", ObjectType.DIR ),
-//                TreeRecordFactory.createFromPathStr( "r1.d2", "r1.d2", ObjectType.DIR ),
-//                TreeRecordFactory.createFromPathStr( "r1.d1.f1", "r1.d1.f1", ObjectType.FILE )
-//        );
-//        Flux.fromStream( Stream.concat( expected.stream(), dummies.stream() ) )
-//                .flatMapSequential( treeService::create, 1 ) // sequential required for concurrency of 1, but...
-//                .blockLast();
-//        Flux<TreeRecord> found = treeService
-//                .selectChildrenAndParent( Ltree.valueOf( "r0" ) );
-//        StepVerifier.create( found ).expectNextSequence( expected ).verifyComplete();
-//    }
+    @Test
+    @DisplayName("selectDescendents returns 0 UUIDs when user_id spoofed")
+    void selectDescendentsReturnsZeroDescendentsSpoofedUserId() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+
+        Flux<UUID> found = Flux.from( treeService.selectDescendents( tree0.getOrigRecord( "dir0" ), user1 ) )
+                .map( rec -> rec.get( TREE.OBJECT_ID ) )
+                .sort();
+        StepVerifier.create( found )
+                .expectNextCount( 0 )
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("hasDescendents returns 1 when only descendent is self")
+    void hasDescendents() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        TreeRecord parent = tree0.getOrigRecord( "dir0.dir1.dir2" );
+
+        Mono<Integer> numDesc = Mono.from( treeService.hasDescendents( parent, user0 ) )
+                .map( rec -> rec.get( "count", Integer.class ) );
+        StepVerifier.create( numDesc )
+                .expectNext( 1 )
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("hasDescendents returns 0 with spoofed userId")
+    void hasDescendentsReturnsZeroWhenNoDescendents() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        TreeRecord parent = tree0.getOrigRecord( "dir0.dir1.dir2" );
+        // note: user1
+        Mono<Integer> numDesc = Mono.from( treeService.hasDescendents( parent, user1 ) )
+                .map( rec -> rec.get( "count", Integer.class ) );
+        StepVerifier.create( numDesc )
+                .expectNext( 0 )
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("hasDescendents returns 0 objectType is ROOT")
+    void hasDescendentsReturnsZeroWhenObjectTypeRoot() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        TreeRecord parent = tree0.getOrigRecord( "" );
+        // note: user1
+        Mono<Integer> numDesc = Mono.from( treeService.hasDescendents( parent, user0 ) )
+                .map( rec -> rec.get( "count", Integer.class ) );
+        StepVerifier.create( numDesc )
+                .expectNext( 0 )
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("hasDescendents returns 2 when multiple descendents")
+    void hasDescendentsReturnsTwoWhenMultipleDescendents() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        TreeRecord parent = tree0.getOrigRecord( "dir0" );
+        // note: user1
+        Mono<Integer> numDesc = Mono.from( treeService.hasDescendents( parent, user0 ) )
+                .map( rec -> rec.get( "count", Integer.class ) );
+        StepVerifier.create( numDesc )
+                .expectNext( 2 )
+                .verifyComplete();
+    }
+
+    @Test
+    @DisplayName("rmDirRecursive deletes records and returns object_ids")
+    void rmDriRecursiveDeletesAndReturnsObjectIds() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+
+        String toDelete = "dir0";
+
+        Flux<UUID> found = treeService.rmDirRecursive( tree0.getOrigRecord( toDelete ), user0 )
+                .sort();
+        Iterable<UUID> expected = Stream.of(
+                        "dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" )
+                .map( p -> tree0.getOrigRecord( p ) )
+                .map( TreeRecord::getObjectId )
+                .sorted()
+                .toList();
+        StepVerifier.create( found )
+                .expectNextSequence( expected )
+                .verifyComplete();
+
+        assertEquals( Stream.of( tree0.getOrigRecord( "" ),
+                                tree0.getOrigRecord( "file0" ) )
+                        .sorted( TreeRecordComparators::compareByObjectId )
+                        .toList(),
+                tree0.fetchAllUserObjects( TreeRecordComparators::compareByObjectId ) );
+        assertNoChanges( tree1 );
+    }
+
+    @ParameterizedTest
+    @DisplayName("rmNormal deletes record and returns object_id")
+    @ValueSource(strings = {"dir0.dir1.dir2", "file0"})
+    void rmNormalDeletesRecordAndReturnsObjectId(String toDelete) {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        TreeRecord recToDelete = tree0.getOrigRecord( toDelete );
+
+        StepVerifier.create( treeService.rmNormal( recToDelete, user0 ) )
+                .expectNext( recToDelete.getObjectId() )
+                .verifyComplete();
+
+        List<TreeRecord> found = tree0.fetchAllUserObjects( TreeRecordComparators::compareByObjectId );
+        List<TreeRecord> expected = tree0.getTrackedObjects( TreeRecordComparators::compareByObjectId )
+                .stream()
+                .filter( r -> !r.equals( recToDelete ) ).toList();
+        assertIterableEquals( expected, found );
+
+        assertNoChanges( tree1 );
+    }
 }
