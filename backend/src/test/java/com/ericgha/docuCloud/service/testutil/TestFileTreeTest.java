@@ -22,6 +22,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import static com.ericgha.docuCloud.service.testutil.assertion.TestFileTreeAssertions.assertNoChanges;
@@ -165,4 +166,17 @@ public class TestFileTreeTest {
         assertEquals( user0.getUserId(), userIdCaptor.getValue() );
     }
 
+    @Test
+    @DisplayName("getTrackedObjectsOfType returns expected records")
+    void getTrackedObjectsOfTypeReturnsExpectedRecords() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        List<String> expected = List.of("dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3");
+        List<String> found = tree0.getTrackedObjectsOfType( ObjectType.DIR )
+                .stream()
+                .map( TreeRecord::getPath )
+                .map(Ltree::data)
+                .sorted()
+                .toList();
+        assertIterableEquals( expected, found );
+    }
 }

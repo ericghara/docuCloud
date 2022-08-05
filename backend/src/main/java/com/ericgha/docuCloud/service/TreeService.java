@@ -2,6 +2,7 @@ package com.ericgha.docuCloud.service;
 
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
+import com.ericgha.docuCloud.jooq.tables.Tree;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 import lombok.RequiredArgsConstructor;
 import org.jooq.CommonTableExpression;
@@ -225,5 +226,13 @@ public class TreeService {
                 .where( TREE.OBJECT_ID.eq( sourceRecord.getObjectId() )
                         .and( TREE.USER_ID.eq( cloudUser.getUserId() ) )
                         .and( TREE.OBJECT_TYPE.eq( ObjectType.FILE ) ) );
+    }
+
+    SelectConditionStep<Record1<Boolean>> isObjectType(ObjectType objectType, TreeRecord treeRecord, CloudUser cloudUser) {
+        return dsl.select( when( count( Tree.TREE.OBJECT_ID ).eq( 0 ), false ).otherwise( true ) )
+                .from( Tree.TREE )
+                .where( Tree.TREE.OBJECT_ID.eq( treeRecord.getObjectId() )
+                        .and( Tree.TREE.OBJECT_TYPE.eq( objectType ) )
+                        .and( Tree.TREE.USER_ID.eq( cloudUser.getUserId() ) ) );
     }
 }

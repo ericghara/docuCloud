@@ -10,8 +10,11 @@ import org.jooq.impl.DSL;
 import org.springframework.boot.autoconfigure.jooq.DefaultConfigurationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.r2dbc.connection.TransactionAwareConnectionFactoryProxy;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @Configuration
+@EnableTransactionManagement
 @AllArgsConstructor
 public class JooqConfiguration {
 
@@ -25,7 +28,9 @@ public class JooqConfiguration {
 
     @Bean
     public DSLContext jooqDslContext() {
-        return DSL.using( cfi, SQLDialect.POSTGRES, new Settings().withRenderFormatted(true) ).
-                dsl();
+        return DSL.using( new TransactionAwareConnectionFactoryProxy(cfi), SQLDialect.POSTGRES, new Settings().withRenderFormatted(true)
+                        .withBindOffsetDateTimeType( true )
+                        .withBindOffsetTimeType( true ) )
+                .dsl();
     }
 }

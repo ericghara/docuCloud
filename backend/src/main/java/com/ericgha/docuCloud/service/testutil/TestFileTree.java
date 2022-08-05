@@ -94,6 +94,12 @@ public class TestFileTree {
                 } ).collect( Collectors.toCollection( ArrayList::new ) );
     }
 
+    public List<TreeRecord> getTrackedObjectsOfType(ObjectType objectType) {
+        return this.getTrackedObjects().stream()
+                .filter(rec -> rec.getObjectType() == objectType)
+                .toList();
+    }
+
     // returns objects in order specified by comparator
     public List<TreeRecord> getTrackedObjects(@NonNull Comparator<TreeRecord> comparator) {
         List<TreeRecord> records = this.getTrackedObjects();
