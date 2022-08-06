@@ -1,4 +1,4 @@
-package com.ericgha.docuCloud.service.testutil;
+package com.ericgha.docuCloud.util.comparators;
 
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 

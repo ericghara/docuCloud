@@ -2,7 +2,7 @@ package com.ericgha.docuCloud.service.testutil.assertion;
 
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 import com.ericgha.docuCloud.service.testutil.TestFileTree;
-import com.ericgha.docuCloud.service.testutil.TreeRecordComparators;
+import com.ericgha.docuCloud.util.comparators.TreeRecordComparators;
 import org.jooq.postgres.extensions.types.Ltree;
 
 import java.util.List;

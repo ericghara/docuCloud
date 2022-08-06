@@ -28,30 +28,30 @@ public class FileTestQueries {
 
     private final DSLContext dsl;
 
-    Flux<FileViewRecord> recordsByUser(CloudUser cloudUser) {
+    Flux<FileViewRecord> recordsByUser(CloudUser cloudUser, Comparator<FileViewRecord> comparator) {
         return Flux.from( dsl.selectFrom( FILE_VIEW )
-                .where( FILE_VIEW.USER_ID.eq( cloudUser.getUserId() ) ) );
+                .where( FILE_VIEW.USER_ID.eq( cloudUser.getUserId() ) ) )
+                .sort(comparator);
     }
 
-    Mono<FileViewRecord> fetchLink(UUID objectId, UUID fileId, CloudUser cloudUser) {
+    Mono<FileViewRecord> fetchLink(UUID objectId, UUID fileId) {
         return Mono.from( dsl.selectFrom( FILE_VIEW ).where(
                 FILE_VIEW.OBJECT_ID.eq( objectId )
-                .and( FILE_VIEW.FILE_ID.eq( fileId ) )
-                .and( FILE_VIEW.USER_ID.eq( cloudUser.getUserId() ) ) ) );
+                .and( FILE_VIEW.FILE_ID.eq( fileId ) ) ) );
     }
 
-    Mono<FileViewRecord> fetchLink(FileViewRecord fileViewRecord, CloudUser cloudUser) {
+    Mono<FileViewRecord> fetchLink(FileViewRecord fileViewRecord) {
         return fetchLink(fileViewRecord.getObjectId(),
-                fileViewRecord.getFileId(),
-                cloudUser );
+                fileViewRecord.getFileId() );
     }
 
     // can only create a link not a file
     // Allow links b/t different users data if the table allows...
     // Be careful with comparators here
-    Flux<TreeJoinFileRecord> createLinks(Collection<FileViewRecord> newLinks, Comparator<FileViewRecord> comparator) {
+    Flux<TreeJoinFileRecord> createLinks(Collection<FileViewRecord> newLinks, Comparator<TreeJoinFileRecord> comparator) {
         List<Mono<FileViewRecord>> queries = newLinks.stream().map( rec -> dsl.insertInto(FILE_VIEW).set(FILE_VIEW.OBJECT_ID, rec.getObjectId() )
                 .set(FILE_VIEW.FILE_ID, rec.getFileId() )
+                // required due to table constraints
                 .set(FILE_VIEW.USER_ID, rec.getUserId() )
                 .set( FILE_VIEW.LINKED_AT, currentOffsetDateTime() )
                 .returning( asterisk() ) )
@@ -60,7 +60,8 @@ public class FileTestQueries {
         return Flux.concat(queries).map( fvr -> new TreeJoinFileRecord()
                 .setObjectId( fvr.getObjectId() )
                 .setFileId( fvr.getFileId() )
-                .setLinkedAt( fvr.getLinkedAt() ) );
+                .setLinkedAt( fvr.getLinkedAt() ) )
+                .sort(comparator);
     }
 
     Flux<Record2<UUID, Long>> fetchFileLinkingDegree(CloudUser cloudUser) {

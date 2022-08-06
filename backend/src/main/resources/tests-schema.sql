@@ -70,17 +70,21 @@
 --		OLD TABLE AS old_table
 --	for each STATEMENT EXECUTE function leavesNoOrphans();
 
+;DROP VIEW IF EXISTS public.file_view;
+;DROP TABLE IF EXISTS public.tree_join_file;
+;DROP TABLE IF EXISTS public.file;
+
 ;CREATE TABLE IF NOT EXISTS public.file (
 	file_id uuid PRIMARY KEY NOT NULL DEFAULT uuid_generate_v4(),
 	checksum varchar(64),
 	SIZE bigint,
-	created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+	uploaded_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 ;CREATE TABLE IF NOT EXISTS public.tree_join_file (
 	object_id uuid NOT NULL REFERENCES public.tree DEFERRABLE INITIALLY DEFERRED,
 	file_id uuid NOT NULL REFERENCES public.file DEFERRABLE INITIALLY DEFERRED,
-	created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	linked_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	PRIMARY KEY (object_id, file_id)
 );
 
@@ -88,8 +92,8 @@
 	SELECT tree.object_id,
 		file.file_id,
 		tree.user_id,
-		file.created_at AS uploaded_at,
-		tree_join_file.created_at AS linked_at,
+		file.uploaded_at,
+		tree_join_file.linked_at,
 		file.checksum,
 		file.size
 	FROM public.file
@@ -98,18 +102,18 @@
 	LEFT JOIN public.tree
 	ON tree.object_id = tree_join_file.object_id;
 
-;CREATE OR REPLACE FUNCTION file_view_ins() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION file_view_ins() RETURNS TRIGGER AS $$
 BEGIN
 	IF 0 < num_nulls(NEW.object_id, NEW.user_id) OR
 		(SELECT tree.user_id FROM tree WHERE NEW.object_id = tree.object_id AND NEW.user_id = tree.user_id) IS NULL THEN
 		RAISE EXCEPTION 'User does not have access to file, or file object does not exist';
 	ELSEIF 0 = num_nulls(NEW.file_id, NEW.linked_at) AND 0 = num_nonnulls(NEW.uploaded_at, NEW.checksum, NEW.size) THEN
-		INSERT INTO public.tree_join_file (object_id, file_id, created_at)
+		INSERT INTO public.tree_join_file (object_id, file_id, linked_at)
 			values(NEW.object_id, NEW.file_id, NEW.linked_at);
 	ELSEIF 0 = num_nulls(NEW.file_id, NEW.linked_at, NEW.uploaded_at, NEW.checksum, NEW.size) THEN
-			INSERT INTO public.tree_join_file (object_id, file_id, created_at)
+			INSERT INTO public.tree_join_file (object_id, file_id, linked_at)
 				values(NEW.object_id, NEW.file_id, NEW.linked_at);
-			INSERT INTO public.file (file_id, checksum, SIZE, created_at)
+			INSERT INTO public.file (file_id, checksum, SIZE, uploaded_at)
 				values(NEW.file_id, NEW.checksum, NEW.SIZE, NEW.uploaded_at);
 	ELSE
 		RAISE EXCEPTION 'improper arguments: missing required fields or provided too many fields';
@@ -118,7 +122,7 @@ BEGIN
 END;
 $$ language plpgsql;
 
-;CREATE OR REPLACE TRIGGER file_view_ins_trigger INSTEAD OF INSERT ON public.file_view
+CREATE OR REPLACE TRIGGER file_view_ins_trigger INSTEAD OF INSERT ON public.file_view
 	FOR EACH ROW EXECUTE PROCEDURE file_view_ins();
 
 
