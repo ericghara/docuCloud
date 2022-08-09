@@ -1,7 +1,7 @@
 package com.ericgha.docuCloud.repository.testutil.file;
 
 import com.ericgha.docuCloud.dto.CloudUser;
-import com.ericgha.docuCloud.jooq.tables.records.FileViewRecord;
+import com.ericgha.docuCloud.dto.FileViewDto;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTreeFactory;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
@@ -72,13 +72,13 @@ class TestFilesTest {
     }
 
     @Test
-    @DisplayName( "createFileViewRecord creates a new file record linked to expected object" )
-    void createFileViewRecordExistingFile() {
+    @DisplayName( "createFileViewDto creates a new file record linked to expected object" )
+    void createFileViewDtoExistingFile() {
         String checksum = "fileRes0";
         String objPath = "fileObj0";
         TestFiles files0 = fileFactory.construct( tree0 );
-        files0.createFileViewRecord( objPath, checksum );
-        Flux<FileViewRecord> found = fileQueries.fetchRecordsByChecksum(checksum, tree0.getUserId() );
+        files0.createFileViewDto( objPath, checksum );
+        Flux<FileViewDto> found = fileQueries.fetchRecordsByChecksum(checksum, tree0.getUserId() );
         UUID expectedObjectId = tree0.fetchByObjectPath( objPath ).getObjectId();
         StepVerifier.create( found ).assertNext( fvr -> {
             assertEquals(expectedObjectId, fvr.getObjectId() );
@@ -92,12 +92,12 @@ class TestFilesTest {
     }
 
     @Test
-    @DisplayName("createFileViewRecord records object <-> file link")
-    void createFileViewRecordStoresRecord() {
+    @DisplayName("createFileViewDto records object <-> file link")
+    void createFileViewDtoStoresRecord() {
         String checksum = "fileRes0";
         String objPath = "fileObj0";
         TestFiles files0 = fileFactory.construct( tree0 );
-        files0.createFileViewRecord( objPath, checksum );
+        files0.createFileViewDto( objPath, checksum );
 //        NavigableSet<TreeRecord> objects =
 
     }

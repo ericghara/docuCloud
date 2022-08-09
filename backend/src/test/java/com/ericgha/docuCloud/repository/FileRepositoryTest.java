@@ -1,13 +1,11 @@
 package com.ericgha.docuCloud.repository;
 
-import com.ericgha.docuCloud.converter.FileViewRecordToFileRecord;
+import com.ericgha.docuCloud.converter.FileViewDtoToFileDto;
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.repository.testutil.file.FileTestQueries;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTreeFactory;
-import com.ericgha.docuCloud.repository.testutil.tree.TreeTestQueries;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
-import jakarta.annotation.PostConstruct;
 import org.jooq.DSLContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,9 +29,11 @@ class FileRepositoryTest {
     @Autowired
     private FileRepository fileRepository;
 
-    private final FileViewRecordToFileRecord fvrTofr = new FileViewRecordToFileRecord();
+    private final FileViewDtoToFileDto fileViewToFile = new FileViewDtoToFileDto();
 
+    @Autowired
     private TestFileTreeFactory treeFactory;
+    @Autowired
     private FileTestQueries fileQueries;
 
     private final CloudUser user0 = CloudUser.builder()
@@ -58,14 +58,6 @@ class FileRepositoryTest {
     private TestFileTree tree0;
     private TestFileTree tree1;
 
-    @PostConstruct
-    void postConstruct() {
-        TreeTestQueries treeTestQueries = new TreeTestQueries( dsl );
-        treeFactory = new TestFileTreeFactory( treeTestQueries );
-        fileQueries = new FileTestQueries( dsl );
-    }
-
-
     @BeforeEach
     void before() throws URISyntaxException, IOException {
         // testcontainers cannot reliably run complex init scrips (ie with declared functions)
@@ -82,8 +74,8 @@ class FileRepositoryTest {
 //    // This fails, and is atrocious so will be replaced
 //    void linkExistingFileCreatesLink() {
 //        TreeRecord curLinkedObj = tree0.getOrigRecord( "file0" );
-//        FileRecord curFile = fileQueries.createFilesWithLinks( List.of(FileViewRecordCreator.create( curLinkedObj , user0, 0 ) ),
-//                FileViewRecordComparators.compareBySizeObjectId() ).map(fvrTofr::convert).blockLast();
+//        FileDto curFile = fileQueries.createFilesWithLinks( List.of(FileViewDtoCreator.create( curLinkedObj , user0, 0 ) ),
+//                FileViewDtoComparators.compareBySizeObjectId() ).map(fvrTofr::convert).blockLast();
 //        TreeRecord newObj = tree0.getOrigRecord( "file1" );
 //        // make link to existing
 //        StepVerifier.create(fileService.linkExistingFile( curFile, newObj, user0 ) )

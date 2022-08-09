@@ -1,9 +1,9 @@
 package com.ericgha.docuCloud.repository.testutil.file;
 
-import com.ericgha.docuCloud.converter.FileViewRecordToTreeJoinFileRecord;
+import com.ericgha.docuCloud.converter.FileViewDtoToTreeJoinFileDto;
 import com.ericgha.docuCloud.dto.CloudUser;
-import com.ericgha.docuCloud.jooq.tables.records.FileViewRecord;
-import com.ericgha.docuCloud.jooq.tables.records.TreeJoinFileRecord;
+import com.ericgha.docuCloud.dto.FileViewDto;
+import com.ericgha.docuCloud.dto.TreeJoinFileDto;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 import org.jooq.Record2;
@@ -31,61 +31,63 @@ import static org.jooq.impl.DSL.*;
 public class FileTestQueries {
 
     private final DSLContext dsl;
-    private final FileViewRecordToTreeJoinFileRecord fvrToTjfrConverter = new FileViewRecordToTreeJoinFileRecord();
+    private final FileViewDtoToTreeJoinFileDto fileViewToTreeJoinFile;
 
-    public Flux<FileViewRecord> fetchRecordsByUserId(CloudUser cloudUser, Comparator<FileViewRecord> comparator) {
+    public Flux<FileViewDto> fetchRecordsByUserId(CloudUser cloudUser, Comparator<FileViewDto> comparator) {
         return fetchRecordsByUserId( cloudUser.getUserId(), comparator );
     }
 
-    public Flux<FileViewRecord> fetchRecordsByUserId(UUID userId, Comparator<FileViewRecord> comparator) {
+    public Flux<FileViewDto> fetchRecordsByUserId(UUID userId, Comparator<FileViewDto> comparator) {
         return Flux.from( dsl.selectFrom( FILE_VIEW )
                         .where( FILE_VIEW.USER_ID.eq( userId ) ) )
+                .map(FileViewDto::fromRecord)
                 .sort( comparator );
     }
 
-    public Mono<FileViewRecord> fetchFileViewRecord(UUID objectId, UUID fileId) {
+    public Mono<FileViewDto> fetchFileViewDto(UUID objectId, UUID fileId) {
         return Mono.from( dsl.selectFrom( FILE_VIEW ).where(
                 FILE_VIEW.OBJECT_ID.eq( objectId )
-                        .and( FILE_VIEW.FILE_ID.eq( fileId ) ) ) );
+                        .and( FILE_VIEW.FILE_ID.eq( fileId ) ) ) )
+                .map(FileViewDto::fromRecord);
     }
 
-    public Flux<FileViewRecord> fetchRecordsByFileId(UUID fileId, UUID userId) {
+    public Flux<FileViewDto> fetchRecordsByFileId(UUID fileId, UUID userId) {
         return Flux.from( dsl.selectFrom( FILE_VIEW )
                 .where( FILE_VIEW.FILE_ID.eq( fileId )
-                        .and( FILE_VIEW.USER_ID.eq( userId ) ) ) );
+                        .and( FILE_VIEW.USER_ID.eq( userId ) ) ) )
+                .map(FileViewDto::fromRecord);
     }
 
-    public Flux<FileViewRecord> fetchRecordsByChecksum(String checksum, UUID userId) {
+    public Flux<FileViewDto> fetchRecordsByChecksum(String checksum, UUID userId) {
         return Flux.from( dsl.selectFrom( FILE_VIEW )
                 .where( FILE_VIEW.CHECKSUM.eq( checksum )
-                        .and( FILE_VIEW.USER_ID.eq( userId ) ) ) );
+                        .and( FILE_VIEW.USER_ID.eq( userId ) ) ) )
+                .map(FileViewDto::fromRecord);
     }
 
-    public Flux<FileViewRecord> fetchRecordsByObjectId(UUID objectId) {
+    public Flux<FileViewDto> fetchRecordsByObjectId(UUID objectId) {
         return Flux.from( dsl.selectFrom(FILE_VIEW)
-                .where(FILE_VIEW.OBJECT_ID.eq(objectId) ) );
+                .where(FILE_VIEW.OBJECT_ID.eq(objectId) ) )
+                .map(FileViewDto::fromRecord);
     }
 
     // from existing file view record fetches current
-    public Mono<FileViewRecord> fetchFileViewRecord(FileViewRecord fileViewRecord) {
-        return fetchFileViewRecord( fileViewRecord.getObjectId(),
+    public Mono<FileViewDto> fetchFileViewDto(FileViewDto fileViewRecord) {
+        return fetchFileViewDto( fileViewRecord.getObjectId(),
                 fileViewRecord.getFileId() );
     }
 
     // can only create a link not a file
     // Allow links b/t different users data if the table allows...
-    public Flux<TreeJoinFileRecord> createLinks(Collection<FileViewRecord> newLinks, Comparator<TreeJoinFileRecord> comparator) {
-        List<Mono<TreeJoinFileRecord>> queries = newLinks.stream()
+    public Flux<TreeJoinFileDto> createLinks(Collection<FileViewDto> newLinks, Comparator<TreeJoinFileDto> comparator) {
+        List<Mono<TreeJoinFileDto>> queries = newLinks.stream()
                 .map( this::createLink )
                 .toList();
-        return Flux.concat( queries ).map( fvr -> new TreeJoinFileRecord()
-                        .setObjectId( fvr.getObjectId() )
-                        .setFileId( fvr.getFileId() )
-                        .setLinkedAt( fvr.getLinkedAt() ) )
+        return Flux.concat( queries )
                 .sort( comparator );
     }
 
-    public Mono<TreeJoinFileRecord> createLink(FileViewRecord rec) {
+    public Mono<TreeJoinFileDto> createLink(FileViewDto rec) {
         return Mono.from( dsl.insertInto( FILE_VIEW ).set( FILE_VIEW.OBJECT_ID, rec.getObjectId() )
                         .set( FILE_VIEW.FILE_ID, rec.getFileId() )
                         // required due to table constraints
@@ -93,14 +95,15 @@ public class FileTestQueries {
                         .set( FILE_VIEW.LINKED_AT, currentOffsetDateTime() )
                         .returning( asterisk() ) )
                 // Converts result to treeJoinFileRecord because many fields are null in fileViewRecord
-                .map( fvrToTjfrConverter::convert );
+                .map(FileViewDto::fromRecord)
+                .map( fileViewToTreeJoinFile::convert );
     }
 
-    // must provide a full FileViewRecord aside from timestamps (uploaded_at, linked_at
+    // must provide a full FileViewDto aside from timestamps (uploaded_at, linked_at
     // allows linking to another users object if the table allows...
 
-    public Flux<FileViewRecord> createFilesWithLinks(Collection<FileViewRecord> fileViewRecords, Comparator<FileViewRecord> comparator) {
-        List<Mono<FileViewRecord>> queries = fileViewRecords.stream()
+    public Flux<FileViewDto> createFilesWithLinks(Collection<FileViewDto> fileViewRecords, Comparator<FileViewDto> comparator) {
+        List<Mono<FileViewDto>> queries = fileViewRecords.stream()
                 .map( this::createFileWithLinks )
                 .toList();
         return Flux.fromIterable( queries )
@@ -108,16 +111,17 @@ public class FileTestQueries {
                 .sort( comparator );
     }
 
-    public Mono<FileViewRecord> createFileWithLinks(FileViewRecord fileViewRecord) {
+    public Mono<FileViewDto> createFileWithLinks(FileViewDto fileViewDto) {
         return Mono.from( dsl.insertInto( FILE_VIEW )
-                .set( FILE_VIEW.OBJECT_ID, fileViewRecord.getObjectId() )
-                .set( FILE_VIEW.FILE_ID, fileViewRecord.getFileId() )
-                .set( FILE_VIEW.USER_ID, fileViewRecord.getUserId() )
+                .set( FILE_VIEW.OBJECT_ID, fileViewDto.getObjectId() )
+                .set( FILE_VIEW.FILE_ID, fileViewDto.getFileId() )
+                .set( FILE_VIEW.USER_ID, fileViewDto.getUserId() )
                 .set( FILE_VIEW.UPLOADED_AT, currentOffsetDateTime() )
                 .set( FILE_VIEW.LINKED_AT, currentOffsetDateTime() )
-                .set( FILE_VIEW.CHECKSUM, fileViewRecord.getChecksum() )
-                .set( FILE_VIEW.SIZE, fileViewRecord.getSize() )
-                .returning( asterisk() ) );
+                .set( FILE_VIEW.CHECKSUM, fileViewDto.getChecksum() )
+                .set( FILE_VIEW.SIZE, fileViewDto.getSize() )
+                .returning( asterisk() ) )
+                .map(FileViewDto::fromRecord);
     }
 
     public Flux<Record2<UUID, Long>> fetchFileLinkingDegreeByFileId(CloudUser cloudUser) {

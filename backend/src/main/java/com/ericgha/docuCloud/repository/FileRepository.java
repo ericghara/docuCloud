@@ -1,11 +1,11 @@
 package com.ericgha.docuCloud.repository;
 
 import com.ericgha.docuCloud.dto.CloudUser;
+import com.ericgha.docuCloud.dto.FileDto;
 import com.ericgha.docuCloud.dto.TreeDto;
+import com.ericgha.docuCloud.dto.TreeJoinFileDto;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
-import com.ericgha.docuCloud.jooq.tables.records.FileRecord;
 import com.ericgha.docuCloud.jooq.tables.records.FileViewRecord;
-import com.ericgha.docuCloud.jooq.tables.records.TreeJoinFileRecord;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 import org.jooq.DeleteResultStep;
@@ -38,26 +38,27 @@ public class FileRepository {
     // TODO
 
     // TODO isObjectType test
-    public Mono<Long> linkExistingFile(FileRecord fileRecord, TreeDto treeDto, CloudUser cloudUser) {
+    public Mono<Long> linkExistingFile(FileDto fileDto, TreeDto treeDto, CloudUser cloudUser) {
         SelectConditionStep<Record1<Boolean>> isFile = treeRepository.isObjectType( ObjectType.FILE, treeDto, cloudUser );
 
         return Mono.from( dsl.insertInto( TREE_JOIN_FILE )
-                        .select( dsl.select( val( treeDto.getObjectId(), UUID.class ), val( fileRecord.getFileId(), UUID.class ), currentOffsetDateTime() )
+                        .select( dsl.select( val( treeDto.getObjectId(), UUID.class ), val( fileDto.getFileId(), UUID.class ), currentOffsetDateTime() )
                                 .where( val( true, Boolean.class ).eq( isFile ) ) ) )
                 .map( (Number num) -> (long) num );
     }
 
-    public Mono<FileRecord> unLinkExistingFile(TreeJoinFileRecord link, CloudUser cloudUser) {
+    public Mono<FileDto> unLinkExistingFile(TreeJoinFileDto link, CloudUser cloudUser) {
         var rmLink = unLink( link, cloudUser );
         var selectCountAfterRm = selectFileLinkDegree( rmLink );
         return Mono.from( dsl.deleteFrom( FILE ).using( selectCountAfterRm )
                 .where( selectCountAfterRm.field( "count", Long.class )
                         .eq( 0L ).and( selectCountAfterRm.field( FILE_VIEW.FILE_ID )
                                 .eq( FILE.FILE_ID ) ) )
-                .returning( asterisk() ) );
+                .returning( asterisk() ) )
+                .map( FileDto::fromRecord );
     }
 
-    DeleteResultStep<FileViewRecord> unLink(TreeJoinFileRecord link, CloudUser cloudUser) {
+    DeleteResultStep<FileViewRecord> unLink(TreeJoinFileDto link, CloudUser cloudUser) {
         return deleteFrom( FILE_VIEW )
                 .where( FILE_VIEW.OBJECT_ID.eq( link.getObjectId() )
                         .and( FILE_VIEW.FILE_ID.eq( link.getFileId() )
@@ -75,8 +76,8 @@ public class FileRepository {
                 .groupBy( FILE_VIEW.FILE_ID );
     }
 
-    SelectJoinStep<Record1<Boolean>> isUsersFile(FileRecord fileRecord, CloudUser cloudUser) {
-        Table<Record2<UUID, UUID>> fileLinks = selectLinksToFile( fileRecord, cloudUser ).limit( 1 ).asTable();
+    SelectJoinStep<Record1<Boolean>> isUsersFile(FileDto fileDto, CloudUser cloudUser) {
+        Table<Record2<UUID, UUID>> fileLinks = selectLinksToFile( fileDto, cloudUser ).limit( 1 ).asTable();
 
         return dsl.select( when( count().eq( 0 ), false )
                         .otherwise( true ) )
@@ -85,10 +86,10 @@ public class FileRepository {
 
     // if user does not own file will always return null, this will therefore trigger a delete request
     // but the delete will never be successful b/c the file is in a prefix that the user does not own
-    SelectConditionStep<Record2<UUID, UUID>> selectLinksToFile(FileRecord fileRecord, CloudUser cloudUser) {
+    SelectConditionStep<Record2<UUID, UUID>> selectLinksToFile(FileDto fileDto, CloudUser cloudUser) {
         return dsl.select( FILE_VIEW.OBJECT_ID, FILE_VIEW.FILE_ID )
                 .from( FILE_VIEW )
-                .where( FILE_VIEW.FILE_ID.eq( fileRecord.getFileId() )
+                .where( FILE_VIEW.FILE_ID.eq( fileDto.getFileId() )
                         .and( FILE_VIEW.USER_ID.eq( cloudUser.getUserId() ) ) );
     }
 

@@ -18,7 +18,7 @@ import java.util.UUID;
 @Getter
 @EqualsAndHashCode
 @ToString
-public class FileViewDao implements Serializable {
+public class FileViewDto implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -41,8 +41,8 @@ public class FileViewDao implements Serializable {
                 .setSize( size );
     }
 
-    static FileViewDao fromRecord(@NonNull FileViewRecord fileViewRecord) {
-        return fileViewRecord.into(FileViewDao.class);
+    public static FileViewDto fromRecord(@NonNull FileViewRecord fileViewRecord) {
+        return fileViewRecord.into( FileViewDto.class);
     }
 
 }
