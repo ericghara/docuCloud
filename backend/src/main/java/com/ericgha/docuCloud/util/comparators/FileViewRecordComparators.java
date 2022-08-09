@@ -6,10 +6,9 @@ import java.util.Comparator;
 
 public class FileViewRecordComparators {
 
-    static public Comparator<FileViewRecord> compareByObjectIdFileIdTime() {
+    static public Comparator<FileViewRecord> compareByObjectIdFileId() {
         return Comparator.comparing(  FileViewRecord::getObjectId )
-                .thenComparing( FileViewRecord::getFileId )
-                .thenComparing( FileViewRecord::getLinkedAt );
+                .thenComparing( FileViewRecord::getFileId );
     }
 
     static public Comparator<FileViewRecord> compareBySizeObjectId() {

@@ -1,7 +1,7 @@
-package com.ericgha.docuCloud.service.testutil.assertion;
+package com.ericgha.docuCloud.repository.testutil.assertion;
 
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
-import com.ericgha.docuCloud.service.testutil.TestFileTree;
+import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
 import com.ericgha.docuCloud.util.comparators.TreeRecordComparators;
 import org.jooq.postgres.extensions.types.Ltree;
 
@@ -21,8 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 public class TestFileTreeAssertions {
 
     static public void assertNoChanges(TestFileTree tree) {
-        List<TreeRecord> found = tree.fetchAllUserObjects( TreeRecordComparators::compareByObjectId);
-        List<TreeRecord> expected = tree.getTrackedObjects(TreeRecordComparators::compareByObjectId);
+        List<TreeRecord> found = tree.fetchAllUserObjects( TreeRecordComparators.compareByObjectId());
+        List<TreeRecord> expected = tree.getTrackedObjects(TreeRecordComparators.compareByObjectId());
         assertIterableEquals( found, expected );
     }
 

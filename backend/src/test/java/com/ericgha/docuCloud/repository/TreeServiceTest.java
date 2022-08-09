@@ -1,16 +1,14 @@
-package com.ericgha.docuCloud.service;
-
+package com.ericgha.docuCloud.repository;
 
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
-import com.ericgha.docuCloud.service.testutil.TestFileTree;
-import com.ericgha.docuCloud.service.testutil.TestFileTreeFactory;
-import com.ericgha.docuCloud.service.testutil.TreeTestQueries;
+import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
+import com.ericgha.docuCloud.repository.testutil.tree.TestFileTreeFactory;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
 import com.ericgha.docuCloud.util.comparators.TreeRecordComparators;
-import jakarta.annotation.PostConstruct;
 import org.jooq.DSLContext;
+import org.jooq.Record1;
 import org.jooq.Record3;
 import org.jooq.Record6;
 import org.jooq.postgres.extensions.types.Ltree;
@@ -36,12 +34,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.ericgha.docuCloud.jooq.Tables.TREE;
-import static com.ericgha.docuCloud.service.testutil.assertion.TestFileTreeAssertions.assertNoChanges;
-import static com.ericgha.docuCloud.service.testutil.assertion.TestFileTreeAssertions.assertNoChangesFor;
+import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertions.assertNoChanges;
+import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertions.assertNoChangesFor;
 import static org.jooq.impl.DSL.currentOffsetDateTime;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -52,17 +51,12 @@ class TreeServiceTest {
     @Autowired
     TreeService treeService;
 
+    @Autowired
     TestFileTreeFactory treeFactory;
     TreeRecordComparators treeRecordComparators;
 
     @Autowired
     DSLContext dsl;
-
-    @PostConstruct
-    void postConstruct() {
-        TreeTestQueries treeTestQueries = new TreeTestQueries( dsl );
-        treeFactory = new TestFileTreeFactory( treeTestQueries );
-    }
 
     CloudUser user0 = CloudUser.builder()
             .userId( UUID.fromString( "1234567-89ab-cdef-fedc-ba9876543210" ) )
@@ -524,9 +518,9 @@ class TreeServiceTest {
 
         assertEquals( Stream.of( tree0.getOrigRecord( "" ),
                                 tree0.getOrigRecord( "file0" ) )
-                        .sorted( TreeRecordComparators::compareByObjectId )
+                        .sorted( TreeRecordComparators.compareByObjectId() )
                         .toList(),
-                tree0.fetchAllUserObjects( TreeRecordComparators::compareByObjectId ) );
+                tree0.fetchAllUserObjects( TreeRecordComparators.compareByObjectId() ) );
         assertNoChanges( tree1 );
     }
 
@@ -542,12 +536,45 @@ class TreeServiceTest {
                 .expectNext( recToDelete.getObjectId() )
                 .verifyComplete();
 
-        List<TreeRecord> found = tree0.fetchAllUserObjects( TreeRecordComparators::compareByObjectId );
-        List<TreeRecord> expected = tree0.getTrackedObjects( TreeRecordComparators::compareByObjectId )
+        List<TreeRecord> found = tree0.fetchAllUserObjects( TreeRecordComparators.compareByObjectId() );
+        List<TreeRecord> expected = tree0.getTrackedObjects( TreeRecordComparators.compareByObjectId() )
                 .stream()
                 .filter( r -> !r.equals( recToDelete ) ).toList();
         assertIterableEquals( expected, found );
 
         assertNoChanges( tree1 );
+    }
+
+    @Test
+    @DisplayName("isObjectType returns true when tested with correct obj type")
+    void isObjectTypeReturnsTrueWhenExpectedType() {
+        BiFunction<ObjectType, TreeRecord, Boolean> isObject = (ObjectType ot, TreeRecord tr) ->
+                Mono.from( treeService.isObjectType( ot, tr, user0 ) ).map( Record1::value1 ).block();
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        tree0.getTrackedObjects().forEach( rec ->
+                assertTrue( isObject.apply( rec.getObjectType(), rec ) ) );
+    }
+
+    @Test
+    @DisplayName("isObjectType returns false when incorrect objectType")
+    void isObjectTypeReturnsFalseWhenIncorrectObjectType() {
+        BiFunction<ObjectType, TreeRecord, Boolean> isObject = (ObjectType ot, TreeRecord tr) ->
+                Mono.from( treeService.isObjectType( ot, tr, user0 ) ).map( Record1::value1 ).block();
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        ObjectType[] objects = ObjectType.values();
+        tree0.getTrackedObjects().forEach( rec -> {
+            var wrongObj = objects[( rec.getObjectType().ordinal() + 1 ) % objects.length];
+            assertFalse( isObject.apply( wrongObj, rec ) );
+        } );
+    }
+
+    @Test
+    @DisplayName("isObjectType returns false when incorrect userId")
+    void isObjectTypeReturnsFalseWhenWrongUserId() {
+        BiFunction<ObjectType, TreeRecord, Boolean> isObject = (ObjectType ot, TreeRecord tr) ->
+                Mono.from( treeService.isObjectType( ot, tr, user1 ) ).map( Record1::value1 ).block();
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        tree0.getTrackedObjects().forEach( rec ->
+                assertFalse( isObject.apply( rec.getObjectType(), rec ) ) );
     }
 }

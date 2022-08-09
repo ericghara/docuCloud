@@ -1,4 +1,4 @@
-package com.ericgha.docuCloud.service.testutil;
+package com.ericgha.docuCloud.repository.testutil.tree;
 
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
@@ -6,7 +6,8 @@ import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
 import org.jooq.postgres.extensions.types.Ltree;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -19,11 +20,12 @@ import static org.jooq.impl.DSL.asterisk;
 import static org.jooq.impl.DSL.defaultValue;
 
 @RequiredArgsConstructor
+@Repository
+@Profile("test")
 public class TreeTestQueries {
 
     private final DSLContext dsl;
 
-    @Transactional
     public Mono<TreeRecord> create(ObjectType objectType, Ltree path, UUID userId) {
         return Mono.from( dsl.insertInto( TREE )
                 .set( TREE.OBJECT_ID, defaultValue( UUID.class ) )
@@ -35,7 +37,6 @@ public class TreeTestQueries {
         );
     }
 
-    @Transactional
     public Mono<TreeRecord> update(TreeRecord record) {
         return Mono.from( dsl.update( TREE )
                 .set( TREE.OBJECT_TYPE, record.getObjectType() )
@@ -47,7 +48,6 @@ public class TreeTestQueries {
         );
     }
 
-    @Transactional(readOnly = true)
     public List<TreeRecord> getAllUserObjects(UUID userId) {
         return Flux.from( dsl.selectFrom( TREE )
                         .where( TREE.USER_ID.eq( userId ) )
@@ -56,11 +56,16 @@ public class TreeTestQueries {
                 .block();
     }
 
-    @Transactional(readOnly = true)
     public TreeRecord getByObjectId(UUID objectId) {
         return Mono.from( dsl.selectFrom( TREE )
             .where( TREE.OBJECT_ID.eq( objectId ) ) )
            .block();
     }
 
+    public TreeRecord getByObjectPath(String pathStr, UUID userId) {
+        return Mono.from(dsl.selectFrom(TREE)
+                .where(TREE.USER_ID.eq(userId)
+                        .and( TREE.PATH.eq(Ltree.valueOf( pathStr )))))
+                .block();
+    }
 }

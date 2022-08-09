@@ -1,4 +1,4 @@
-package com.ericgha.docuCloud.service.testutil;
+package com.ericgha.docuCloud.repository.testutil.file;
 
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.jooq.tables.records.FileViewRecord;
@@ -60,7 +60,7 @@ class FileViewRecordCreatorTest {
 
         try (MockedStatic<FileViewRecordCreator> creatorMock = mockStatic( FileViewRecordCreator.class,
                 withSettings().defaultAnswer( CALLS_REAL_METHODS ) )) {
-            assertEquals( 5, FileViewRecordCreator.create( treeRecords, user0, FileViewRecordComparators.compareByObjectIdFileIdTime() ).size() );
+            assertEquals( 5, FileViewRecordCreator.create( treeRecords, user0, FileViewRecordComparators.compareByObjectIdFileId() ).size() );
             creatorMock.verify( () -> FileViewRecordCreator.create(
                             recordCaptor.capture(), userCaptor.capture(), longCaptor.capture() ),
                     times( 5 ) );

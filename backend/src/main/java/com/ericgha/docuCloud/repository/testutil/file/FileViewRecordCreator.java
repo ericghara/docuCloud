@@ -1,4 +1,4 @@
-package com.ericgha.docuCloud.service.testutil;
+package com.ericgha.docuCloud.repository.testutil.file;
 
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.jooq.tables.records.FileViewRecord;
@@ -21,9 +21,13 @@ import java.util.UUID;
  */
 public class FileViewRecordCreator {
 
+    private FileViewRecordCreator() throws IllegalAccessException {
+        throw new IllegalAccessException("Utility class, do not instantiate.");
+    }
+
     private static final String CHECKSUM_PREFIX = "file";
 
-    static List<FileViewRecord> create(List<TreeRecord> treeRecords, CloudUser cloudUser, Comparator<FileViewRecord> outputComparator) {
+    public static List<FileViewRecord> create(List<TreeRecord> treeRecords, CloudUser cloudUser, Comparator<FileViewRecord> outputComparator) {
         List<FileViewRecord> fvRecords = new ArrayList<>();
         for (int i = 0; i < treeRecords.size(); i++) {
             var tr = treeRecords.get(i);
@@ -35,7 +39,7 @@ public class FileViewRecordCreator {
     }
 
     // Index is used to set checksum and size values.  See class description
-    static FileViewRecord create(@NonNull TreeRecord treeRecord, @NonNull CloudUser cloudUser, long index) {
+    public static FileViewRecord create(@NonNull TreeRecord treeRecord, @NonNull CloudUser cloudUser, long index) {
         var fvRec = new FileViewRecord();
         fvRec.setObjectId( treeRecord.getObjectId() );
         fvRec.setFileId( UUID.randomUUID() );

@@ -1,4 +1,4 @@
-package com.ericgha.docuCloud.service;
+package com.ericgha.docuCloud.repository;
 
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;

@@ -1,9 +1,10 @@
-package com.ericgha.docuCloud.service.testutil;
+package com.ericgha.docuCloud.repository.testutil.tree;
 
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
-import com.ericgha.docuCloud.service.TreeService;
+import com.ericgha.docuCloud.repository.TreeService;
+import lombok.Getter;
 import lombok.NonNull;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.springframework.lang.Nullable;
@@ -28,13 +29,14 @@ import java.util.stream.Collectors;
 public class TestFileTree {
 
     private final Map<Ltree, TreeRecord> recordByPath;
+    @Getter
     private final UUID userId;
     private final TreeTestQueries testQueries;
 
     private final TestFileTreeCsvParser testFileTreeCsvParser = new TestFileTreeCsvParser();
 
 
-    public TestFileTree(@NonNull UUID userId, @NonNull TreeTestQueries testQueries) {
+    TestFileTree(@NonNull UUID userId, @NonNull TreeTestQueries testQueries) {
         this.userId = userId;
         this.testQueries = testQueries;
         this.recordByPath = new HashMap<>();
@@ -82,6 +84,10 @@ public class TestFileTree {
         List<TreeRecord> records = testQueries.getAllUserObjects(userId);
         records.sort(comparator);
         return records;
+    }
+
+    public TreeRecord fetchByObjectPath(@NonNull String pathStr) {
+        return testQueries.getByObjectPath( pathStr, userId );
     }
 
     // returns objects in unspecified order;

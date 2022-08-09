@@ -1,10 +1,13 @@
-package com.ericgha.docuCloud.service.testutil;
+package com.ericgha.docuCloud.repository.testutil.file;
 
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.records.FileViewRecord;
 import com.ericgha.docuCloud.jooq.tables.records.TreeJoinFileRecord;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
+import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
+import com.ericgha.docuCloud.repository.testutil.tree.TestFileTreeFactory;
+import com.ericgha.docuCloud.repository.testutil.tree.TreeTestQueries;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
 import com.ericgha.docuCloud.util.comparators.FileViewRecordComparators;
 import com.ericgha.docuCloud.util.comparators.TreeJoinFileRecordComparators;
@@ -51,6 +54,7 @@ class FileTestQueriesTest {
     @Autowired
     private DSLContext dsl;
 
+    @Autowired
     private FileTestQueries queries;
     private TestFileTree tree0;
     private TestFileTree tree1;
@@ -90,10 +94,10 @@ class FileTestQueriesTest {
                         FileViewRecordCreator.create( treeRecords1, user1, fvrComparator ), fvrComparator )
                 .collectList()
                 .block();
-        StepVerifier.create( queries.recordsByUser( user0, fvrComparator ) )
+        StepVerifier.create( queries.fetchRecordsByUserId( user0, fvrComparator ) )
                 .expectNextSequence( fvr0 )
                 .verifyComplete();
-        StepVerifier.create( queries.recordsByUser( user1, fvrComparator ) )
+        StepVerifier.create( queries.fetchRecordsByUserId( user1, fvrComparator ) )
                 .expectNextSequence( fvr1 )
                 .verifyComplete();
     }
@@ -105,7 +109,7 @@ class FileTestQueriesTest {
         Disposable createdLinks = queries.createFilesWithLinks(
                         FileViewRecordCreator.create( treeRecords, user0, fvrComparator ), fvrComparator )
                 .subscribe( fvr -> {
-                    FileViewRecord found = Mono.from( queries.fetchLink( fvr ) ).block();
+                    FileViewRecord found = Mono.from( queries.fetchFileViewRecord( fvr ) ).block();
                     // using property of FileViewRecordCreator where size is index in input array
                     assertEquals( fvr.getSize(), found.getSize() );
                 } );
@@ -134,7 +138,7 @@ class FileTestQueriesTest {
     void fetchFileLinkingDegree() {
         List<TreeRecord> treeRecords = tree0.getTrackedObjectsOfType( ObjectType.FILE );
         // create 2 1 degree links
-        List<FileViewRecord> newFileRecords = FileViewRecordCreator.create( treeRecords.subList( 0, 2 ), user0, FileViewRecordComparators.compareByObjectIdFileIdTime() );
+        List<FileViewRecord> newFileRecords = FileViewRecordCreator.create( treeRecords.subList( 0, 2 ), user0, FileViewRecordComparators.compareByObjectIdFileId() );
         queries.createFilesWithLinks( newFileRecords, fvrComparator ).blockLast();
         // add 2 more links to 2nd.  Degree 2nd = 3;
         List<FileViewRecord> extraLinks = IntStream.range( 0, 2 ).boxed()
@@ -143,7 +147,7 @@ class FileTestQueriesTest {
                         .setUserId( user0.getUserId() ) )
                 .toList();
         queries.createLinks( extraLinks, tjfComparator ).blockLast();
-        List<Record2<UUID, Long>> degreeByFileId = queries.fetchFileLinkingDegree( user0 )
+        List<Record2<UUID, Long>> degreeByFileId = queries.fetchFileLinkingDegreeByFileId( user0 )
                 .sort( Comparator.comparing( rec2 -> rec2.get( "count", Long.class ) ) )
                 .collectList()
                 .block();
@@ -180,7 +184,7 @@ class FileTestQueriesTest {
                         i -> FileViewRecordCreator.create( treeRecords.subList( 4 - i, 4 ), user0, fvrComparator ).stream() )
                 .toList();
         queries.createFilesWithLinks( toCreate, fvrComparator ).blockLast();
-        List<Record2<UUID, Long>> degree = queries.fetchObjectLinkingDegree( user0 )
+        List<Record2<UUID, Long>> degree = queries.fetchObjectLinkingDegreeByObjectId( user0 )
                 .sort( Comparator.comparing( rec2 -> rec2.get( "count", Long.class ) ) )
                 .collectList().block();
         degree.forEach( rec2 -> assertEquals(

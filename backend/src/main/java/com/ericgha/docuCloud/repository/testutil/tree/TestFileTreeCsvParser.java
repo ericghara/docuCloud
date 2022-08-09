@@ -1,4 +1,4 @@
-package com.ericgha.docuCloud.service.testutil;
+package com.ericgha.docuCloud.repository.testutil.tree;
 
 import com.ericgha.docuCloud.converter.CsvLtreeFormatter;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;

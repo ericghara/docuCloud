@@ -17,7 +17,7 @@ import java.util.UUID;
 @EqualsAndHashCode
 @ToString
 @Getter
-public class CloudUser implements UserDetails {
+public final class CloudUser implements UserDetails {
 
     private final UUID userId;
     @NonNull

@@ -1,10 +1,9 @@
-package com.ericgha.docuCloud.service.testutil;
+package com.ericgha.docuCloud.repository.testutil.tree;
 
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
-import jakarta.annotation.PostConstruct;
 import org.jooq.DSLContext;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,8 +24,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import static com.ericgha.docuCloud.service.testutil.assertion.TestFileTreeAssertions.assertNoChanges;
-import static com.ericgha.docuCloud.service.testutil.assertion.TestFileTreeAssertions.assertNoChangesFor;
+import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertions.assertNoChanges;
+import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertions.assertNoChangesFor;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -37,13 +36,11 @@ public class TestFileTreeTest {
 
     @Autowired
     DSLContext dsl;
-    TreeTestQueries treeTestQueries;
+
+    @Autowired
     TestFileTreeFactory treeFactory;
-    @PostConstruct
-    void postConstruct() {
-        treeTestQueries =  new TreeTestQueries( dsl );
-        treeFactory = new TestFileTreeFactory( treeTestQueries );
-    }
+    @Autowired
+    TreeTestQueries treeTestQueries;
 
     CloudUser user0 = CloudUser.builder()
             .userId( UUID.fromString("1234567-89ab-cdef-fedc-ba9876543210" ) )
@@ -178,5 +175,15 @@ public class TestFileTreeTest {
                 .sorted()
                 .toList();
         assertIterableEquals( expected, found );
+    }
+
+    @Test
+    @DisplayName( "fetchByObjectPath fetches expected TreeRecord" )
+    void fetchByObjectPath() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        TreeRecord expected = tree0.getOrigRecord( "dir0.dir1.dir2" );
+        TreeRecord found = tree0.fetchByObjectPath( "dir0.dir1.dir2" );
+        assertEquals(expected, found);
     }
 }
