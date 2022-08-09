@@ -20,7 +20,7 @@ import java.util.UUID;
 @Getter
 @EqualsAndHashCode
 @ToString
-public final class TreeDTO implements Serializable {
+public final class TreeDto implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;

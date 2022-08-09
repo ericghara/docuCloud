@@ -1,12 +1,13 @@
 package com.ericgha.docuCloud.repository;
 
 import com.ericgha.docuCloud.dto.CloudUser;
+import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTreeFactory;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
-import com.ericgha.docuCloud.util.comparators.TreeRecordComparators;
+import com.ericgha.docuCloud.util.comparators.TreeDtoComparators;
 import org.jooq.DSLContext;
 import org.jooq.Record1;
 import org.jooq.Record3;
@@ -46,14 +47,14 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @EnabledPostgresTestContainer
-class TreeServiceTest {
+class TreeRepositoryTest {
 
     @Autowired
-    TreeService treeService;
+    TreeRepository treeRepository;
 
     @Autowired
     TestFileTreeFactory treeFactory;
-    TreeRecordComparators treeRecordComparators;
+    TreeDtoComparators treeDtoComparators;
 
     @Autowired
     DSLContext dsl;
@@ -81,10 +82,10 @@ class TreeServiceTest {
     @DisplayName("select path by objectId")
     void selectByObjectId() {
         TestFileTree testFileTree = treeFactory.constructDefault( user0 );
-        TreeRecord createdRecord = testFileTree.getOrigRecord( "dir0" );
+        TreeDto createdRecord = testFileTree.getOrigRecord( "dir0" );
 
         int expectedLevel = 1;
-        StepVerifier.create( treeService.selectDirPathAndLevel( createdRecord, user0 ) )
+        StepVerifier.create( treeRepository.selectDirPathAndLevel( createdRecord, user0 ) )
                 .assertNext( res -> {
                     assertEquals( createdRecord.getPath(), res.getValue( "path" ) );
                     assertEquals( expectedLevel, res.getValue( "level" ) );
@@ -99,10 +100,10 @@ class TreeServiceTest {
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
-        TreeRecord toMove = tree0.getOrigRecord( "dir0" );
+        TreeDto toMove = tree0.getOrigRecord( "dir0" );
         String newBase = "newBase";
 
-        Flux<String> foundPaths = Flux.from( treeService.createMovePath( Ltree.valueOf( newBase ), toMove, user0 ) )
+        Flux<String> foundPaths = Flux.from( treeRepository.createMovePath( Ltree.valueOf( newBase ), toMove, user0 ) )
                 .map( newRecord -> newRecord.get( "path", Ltree.class ) )
                 .map( Ltree::data )
                 .sort();
@@ -121,11 +122,11 @@ class TreeServiceTest {
     @Test
     @DisplayName("Creates the expected record")
     void create() {
-        TreeRecord record = new TreeRecord( null, ObjectType.ROOT,
+        TreeDto record = new TreeDto( null, ObjectType.ROOT,
                 Ltree.valueOf( "" ), null, null );
         OffsetDateTime currentTime = Mono.from( dsl.select( currentOffsetDateTime() ) ).block().component1();
         // returns correct record
-        TreeRecord newRecord = treeService.create( record, user0 ).block();
+        TreeDto newRecord = treeRepository.create( record, user0 ).block();
         assertNotNull( newRecord.getObjectId() );
         assertEquals( record.getObjectType(), newRecord.getObjectType() );
         assertEquals( record.getPath(), newRecord.getPath() );
@@ -146,11 +147,11 @@ class TreeServiceTest {
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
-        TreeRecord beforeMove = tree0.getOrigRecord( "dir0.dir3.file1" );
+        TreeDto beforeMove = tree0.getOrigRecord( "dir0.dir3.file1" );
         Ltree newPath = Ltree.valueOf( "dir0.dir1.file1" );
-        Long rowsChanged = treeService.mvFile( newPath, beforeMove, user0 ).block();
+        Long rowsChanged = treeRepository.mvFile( newPath, beforeMove, user0 ).block();
         assertEquals( 1, rowsChanged, "Unexpected number of rows changed by move" );
-        TreeRecord afterMove = tree0.fetchCurRecord( beforeMove );
+        TreeDto afterMove = tree0.fetchCurRecord( beforeMove );
         assertEquals( beforeMove.getObjectType(), afterMove.getObjectType() );
         assertEquals( beforeMove.getCreatedAt(), afterMove.getCreatedAt() );
         assertEquals( beforeMove.getUserId(), afterMove.getUserId() );
@@ -167,10 +168,10 @@ class TreeServiceTest {
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
-        TreeRecord spoofedRecord = tree0.getOrigRecord( "dir0.dir1.dir2" );
+        TreeRecord spoofedRecord = tree0.getOrigRecord( "dir0.dir1.dir2" ).intoTreeRecord();
         spoofedRecord.setObjectType( ObjectType.FILE ); // force db to handle objectType check;
         Ltree newPath = Ltree.valueOf( "dir0.dir3.dir2" );
-        Long rowsChanged = treeService.mvFile( newPath, spoofedRecord, user0 ).block();
+        Long rowsChanged = treeRepository.mvFile( newPath, spoofedRecord.into( TreeDto.class ), user0 ).block();
 
         assertEquals( 0, rowsChanged, "Unexpected number of rows changed by move" );
         assertNoChanges( tree0 );
@@ -185,19 +186,20 @@ class TreeServiceTest {
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
-        TreeRecord curDir = tree0.getOrigRecord( "dir0" );
+        TreeDto curDir = tree0.getOrigRecord( "dir0" );
         Ltree newName = Ltree.valueOf( "dir100" );
 
-        Mono<Long> rename = treeService.mvDir( newName, curDir, user0 );
+        Mono<Long> rename = treeRepository.mvDir( newName, curDir, user0 );
         StepVerifier.create( rename )
                 .expectNext( 5L )
                 .verifyComplete();
 
         for (String path : List.of( "dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" )) {
             String expectedNewPath = path.replace( "dir0", "dir100" );
-            TreeRecord expectedNewRecord = tree0.getOrigRecord( path );
+            TreeRecord expectedNewRecord = tree0.getOrigRecord( path )
+                    .intoTreeRecord();
             expectedNewRecord.setPath( Ltree.valueOf( expectedNewPath ) );
-            assertEquals( expectedNewRecord, tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
+            assertEquals( expectedNewRecord.into( TreeDto.class ), tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
         }
         assertNoChangesFor( tree0, "", "file0" );
         assertNoChanges( tree1 );
@@ -210,19 +212,20 @@ class TreeServiceTest {
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
-        TreeRecord curDir = tree0.getOrigRecord( "dir0" );
+        TreeDto curDir = tree0.getOrigRecord( "dir0" );
         Ltree newName = Ltree.valueOf( "dir100" );
 
-        Mono<Long> rename = treeService.mvDir( newName, curDir, user0 );
+        Mono<Long> rename = treeRepository.mvDir( newName, curDir, user0 );
         StepVerifier.create( rename )
                 .expectNext( 5L )
                 .verifyComplete();
 
         for (String path : List.of( "dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" )) {
             String expectedNewPath = path.replace( "dir0", "dir100" );
-            TreeRecord expectedNewRecord = tree0.getOrigRecord( path );
+            TreeRecord expectedNewRecord = tree0.getOrigRecord( path )
+                    .intoTreeRecord();
             expectedNewRecord.setPath( Ltree.valueOf( expectedNewPath ) );
-            assertEquals( expectedNewRecord, tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
+            assertEquals( expectedNewRecord.into( TreeDto.class ), tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
         }
         assertNoChangesFor( tree0, "", "file0" );
         assertNoChanges( tree1 );
@@ -236,10 +239,10 @@ class TreeServiceTest {
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
-        TreeRecord origRecord = tree0.getOrigRecord( "dir0.dir3" );
+        TreeDto origRecord = tree0.getOrigRecord( "dir0.dir3" );
         Ltree movePath = Ltree.valueOf( "dir0.dir1.dir2.dir3" );
 
-        Mono<Long> move = treeService.mvDir( movePath, origRecord, user0 );
+        Mono<Long> move = treeRepository.mvDir( movePath, origRecord, user0 );
 
         StepVerifier.create( move )
                 .expectNext( 2L )
@@ -247,9 +250,10 @@ class TreeServiceTest {
 
         for (String path : List.of( "dir0.dir3", "dir0.dir3.file1" )) {
             String expectedNewPath = path.replace( "dir0.dir3", "dir0.dir1.dir2.dir3" );
-            TreeRecord expectedNewRecord = tree0.getOrigRecord( path );
+            TreeRecord expectedNewRecord = tree0.getOrigRecord( path )
+                    .intoTreeRecord();
             expectedNewRecord.setPath( Ltree.valueOf( expectedNewPath ) );
-            assertEquals( expectedNewRecord, tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
+            assertEquals( expectedNewRecord.into( TreeDto.class ), tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
         }
         assertNoChangesFor( tree0, "", "dir0", "file0", "dir0.dir1", "dir0.dir1.dir2" );
         assertNoChanges( tree1 );
@@ -262,11 +266,12 @@ class TreeServiceTest {
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
-        TreeRecord origRecord = tree0.getOrigRecord( "dir0.dir3.file1" );
+        TreeRecord origRecord = tree0.getOrigRecord( "dir0.dir3.file1" )
+                .intoTreeRecord();
         origRecord.setObjectType( ObjectType.DIR ); // spoofed object type;
         Ltree movePath = Ltree.valueOf( "file1" );
 
-        Mono<Long> move = treeService.mvDir( movePath, origRecord, user0 );
+        Mono<Long> move = treeRepository.mvDir( movePath, origRecord.into( TreeDto.class ), user0 );
 
         StepVerifier.create( move )
                 .expectNext( 0L )
@@ -281,25 +286,25 @@ class TreeServiceTest {
     void fetchDirCopyRecordsGeneratesExpectedRecords() {
         // moves dir0.dir3 => dir0.dir2.dir2.dir3
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
-        TreeRecord source = tree0.getOrigRecord( "dir0.dir3" );
+        TreeDto source = tree0.getOrigRecord( "dir0.dir3" );
         Ltree destination = Ltree.valueOf( "dir0.dir1.dir2.dir3" );
         // raw type for brevity here...
-        Map<String, ? extends Record6> copyRecordsByPath = Flux.from( treeService.fetchDirCopyRecords( destination, source, user0 ) )
+        Map<String, ? extends Record6> copyRecordsByPath = Flux.from( treeRepository.fetchDirCopyRecords( destination, source, user0 ) )
                 .collectMap( r -> r.get( TREE.PATH ).data() ).block();
 
-        TreeRecord origDir3 = tree0.getOrigRecord( "dir0.dir3" );
+        TreeDto origDir3 = tree0.getOrigRecord( "dir0.dir3" );
         var curDir3 = copyRecordsByPath.get( destination.data() );
         assertNotEquals( origDir3.getObjectId(), curDir3.get( TREE.OBJECT_ID ) );
         assertEquals( origDir3.getObjectType(), curDir3.get( TREE.OBJECT_TYPE ) );
         assertEquals( origDir3.getUserId(), curDir3.get( TREE.USER_ID ) );
-        assertTrue( origDir3.get( TREE.CREATED_AT ).isBefore( curDir3.get( TREE.CREATED_AT ) ) );
+        assertTrue( origDir3.getCreatedAt().isBefore( curDir3.get( TREE.CREATED_AT ) ) );
 
-        TreeRecord origFile1 = tree0.getOrigRecord( "dir0.dir3.file1" );
+        TreeDto origFile1 = tree0.getOrigRecord( "dir0.dir3.file1" );
         var curFile1 = copyRecordsByPath.get( destination.data() + ".file1" );
         assertNotEquals( origFile1.getObjectId(), curFile1.get( TREE.OBJECT_ID ) );
         assertEquals( origFile1.getObjectType(), curFile1.get( TREE.OBJECT_TYPE ) );
         assertEquals( origFile1.getUserId(), curFile1.get( TREE.USER_ID ) );
-        assertTrue( origFile1.get( TREE.CREATED_AT ).isBefore( curFile1.get( TREE.CREATED_AT ) ) );
+        assertTrue( origFile1.getCreatedAt().isBefore( curFile1.get( TREE.CREATED_AT ) ) );
 
         // this is just the creation of records *to* insert, so not mutating
         assertNoChanges( tree0 );
@@ -309,10 +314,11 @@ class TreeServiceTest {
     @DisplayName("fetchDirCopyRecords does not return records when ObjectType is spoofed")
     void fetchDirCopyRecordsDoesNotFetchSpoofedObjectType() {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
-        TreeRecord source = tree0.getOrigRecord( "dir0.dir3.file1" );
+        TreeRecord source = tree0.getOrigRecord( "dir0.dir3.file1" )
+                .intoTreeRecord();
         source.setObjectType( ObjectType.DIR );
         Ltree destination = Ltree.valueOf( "dir0.dir1.dir2.dir3" );
-        StepVerifier.create( treeService.fetchDirCopyRecords( destination, source, user0 ) )
+        StepVerifier.create( treeRepository.fetchDirCopyRecords( destination, source.into( TreeDto.class ), user0 ) )
                 .expectNextCount( 0 ).verifyComplete();
     }
 
@@ -321,9 +327,9 @@ class TreeServiceTest {
     void fetchDirCopyRecordsDoesNotFetchWhenIncorrectUserId() {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
-        TreeRecord source = tree0.getOrigRecord( "dir0.dir3" );
+        TreeDto source = tree0.getOrigRecord( "dir0.dir3" );
         Ltree destination = Ltree.valueOf( "dir0.dir1.dir2.dir3" );
-        StepVerifier.create( treeService.fetchDirCopyRecords( destination, source, user1 ) )
+        StepVerifier.create( treeRepository.fetchDirCopyRecords( destination, source, user1 ) )
                 .expectNextCount( 0 ).verifyComplete();
     }
 
@@ -335,16 +341,16 @@ class TreeServiceTest {
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
         String srcPathStr = "dir0";
         String destPathSr = "dir100";
-        TreeRecord source = tree0.getOrigRecord( srcPathStr );
+        TreeDto source = tree0.getOrigRecord( srcPathStr );
         Ltree destination = Ltree.valueOf( destPathSr );
 
         Set<String> expectedPaths = Set.of( "dir100", "dir100.dir1", "dir100.dir1.dir2", "dir100.dir3", "dir100.dir3.file1" );
 
-        List<Record3<UUID, UUID, ObjectType>> copy = treeService.cpDir( destination, source, user0 ).collectList().block();
+        List<Record3<UUID, UUID, ObjectType>> copy = treeRepository.cpDir( destination, source, user0 ).collectList().block();
 
         for (Record3<UUID, UUID, ObjectType> record : copy) {
-            TreeRecord srcRec = tree0.fetchCurRecord( record.get( "source_id", UUID.class ) );
-            TreeRecord cpRec = tree0.fetchCurRecord( record.get( "destination_id", UUID.class ) );
+            TreeDto srcRec = tree0.fetchCurRecord( record.get( "source_id", UUID.class ) );
+            TreeDto cpRec = tree0.fetchCurRecord( record.get( "destination_id", UUID.class ) );
             String destFromSrc = srcRec.getPath().data().replace( srcPathStr, destPathSr );
             assertEquals( destFromSrc, cpRec.getPath().data() );
             assertTrue( record.get( "object_type" ) == srcRec.getObjectType()
@@ -352,7 +358,7 @@ class TreeServiceTest {
         }
 
         Map<Boolean, List<String>> recordsByNew = tree0.fetchAllUserObjects()
-                .stream().map( TreeRecord::getPath )
+                .stream().map( TreeDto::getPath )
                 .map( Ltree::data )
                 .collect( Collectors.partitioningBy( expectedPaths::contains ) );
 
@@ -368,17 +374,17 @@ class TreeServiceTest {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         String srcStr = "dir0.dir3.file1";
         String destStr = "dir0.file100";
-        TreeRecord srcRecord = tree0.getOrigRecord( srcStr );
+        TreeDto srcRecord = tree0.getOrigRecord( srcStr );
         var record = Mono.from(
-                        treeService.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord, user0 ) )
+                        treeRepository.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord, user0 ) )
                 .block();
 
-        assertEquals( srcRecord.get( TREE.OBJECT_ID ), record.get( "source_id" ) );
-        assertNotEquals( srcRecord.get( TREE.OBJECT_ID ), record.get( TREE.OBJECT_ID ) );
+        assertEquals( srcRecord.getObjectId(), record.get( "source_id" ) );
+        assertNotEquals( srcRecord.getObjectId(), record.get( TREE.OBJECT_ID ) );
         assertEquals( ObjectType.FILE, record.get( TREE.OBJECT_TYPE ) );
         assertEquals( record.get( TREE.PATH ), Ltree.valueOf( destStr ) );
         assertEquals( record.get( TREE.USER_ID ), user0.getUserId() );
-        assertTrue( record.get( TREE.CREATED_AT ).isAfter( srcRecord.get( TREE.CREATED_AT ) ) );
+        assertTrue( record.get( TREE.CREATED_AT ).isAfter( srcRecord.getCreatedAt() ) );
     }
 
     @Test
@@ -388,8 +394,8 @@ class TreeServiceTest {
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
         String srcStr = "dir0.dir3.file1";
         String destStr = "dir0.file100";
-        TreeRecord srcRecord = tree0.getOrigRecord( srcStr );
-        StepVerifier.create( treeService.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord, user1 ) )
+        TreeDto srcRecord = tree0.getOrigRecord( srcStr );
+        StepVerifier.create( treeRepository.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord, user1 ) )
                 .expectNextCount( 0 )
                 .verifyComplete();
     }
@@ -400,10 +406,11 @@ class TreeServiceTest {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         String srcStr = "dir0.dir1";
         String destStr = "dir0.file100";
-        TreeRecord srcRecord = tree0.getOrigRecord( srcStr );
+        TreeRecord srcRecord = tree0.getOrigRecord( srcStr )
+                .intoTreeRecord();
         srcRecord.setObjectType( ObjectType.FILE ); // spoofed object type
         var record = Mono.from(
-                treeService.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord, user0 ) );
+                treeRepository.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord.into(TreeDto.class), user0 ) );
         StepVerifier.create( record ).expectNextCount( 0 ).verifyComplete();
     }
 
@@ -412,13 +419,12 @@ class TreeServiceTest {
     void selectDescendentsReturnsDescendents() {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
-        List<UUID> expected = List.of( "dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" )
-                .stream()
-                .map( pathStr -> tree0.getOrigRecord( pathStr ) )
-                .map( TreeRecord::getObjectId )
+        List<UUID> expected = Stream.of( "dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" )
+                .map( tree0::getOrigRecord )
+                .map( TreeDto::getObjectId )
                 .sorted()
                 .toList();
-        Flux<UUID> found = Flux.from( treeService.selectDescendents( tree0.getOrigRecord( "dir0" ), user0 ) )
+        Flux<UUID> found = Flux.from( treeRepository.selectDescendents( tree0.getOrigRecord( "dir0" ), user0 ) )
                 .map( rec -> rec.get( TREE.OBJECT_ID ) )
                 .sort();
         StepVerifier.create( found )
@@ -432,7 +438,7 @@ class TreeServiceTest {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
-        Flux<UUID> found = Flux.from( treeService.selectDescendents( tree0.getOrigRecord( "dir0" ), user1 ) )
+        Flux<UUID> found = Flux.from( treeRepository.selectDescendents( tree0.getOrigRecord( "dir0" ), user1 ) )
                 .map( rec -> rec.get( TREE.OBJECT_ID ) )
                 .sort();
         StepVerifier.create( found )
@@ -445,9 +451,9 @@ class TreeServiceTest {
     void hasDescendents() {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
-        TreeRecord parent = tree0.getOrigRecord( "dir0.dir1.dir2" );
+        TreeDto parent = tree0.getOrigRecord( "dir0.dir1.dir2" );
 
-        Mono<Integer> numDesc = Mono.from( treeService.hasDescendents( parent, user0 ) )
+        Mono<Integer> numDesc = Mono.from( treeRepository.hasDescendents( parent, user0 ) )
                 .map( rec -> rec.get( "count", Integer.class ) );
         StepVerifier.create( numDesc )
                 .expectNext( 1 )
@@ -459,9 +465,9 @@ class TreeServiceTest {
     void hasDescendentsReturnsZeroWhenNoDescendents() {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
-        TreeRecord parent = tree0.getOrigRecord( "dir0.dir1.dir2" );
+        TreeDto parent = tree0.getOrigRecord( "dir0.dir1.dir2" );
         // note: user1
-        Mono<Integer> numDesc = Mono.from( treeService.hasDescendents( parent, user1 ) )
+        Mono<Integer> numDesc = Mono.from( treeRepository.hasDescendents( parent, user1 ) )
                 .map( rec -> rec.get( "count", Integer.class ) );
         StepVerifier.create( numDesc )
                 .expectNext( 0 )
@@ -473,9 +479,9 @@ class TreeServiceTest {
     void hasDescendentsReturnsZeroWhenObjectTypeRoot() {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
-        TreeRecord parent = tree0.getOrigRecord( "" );
+        TreeDto parent = tree0.getOrigRecord( "" );
         // note: user1
-        Mono<Integer> numDesc = Mono.from( treeService.hasDescendents( parent, user0 ) )
+        Mono<Integer> numDesc = Mono.from( treeRepository.hasDescendents( parent, user0 ) )
                 .map( rec -> rec.get( "count", Integer.class ) );
         StepVerifier.create( numDesc )
                 .expectNext( 0 )
@@ -487,9 +493,9 @@ class TreeServiceTest {
     void hasDescendentsReturnsTwoWhenMultipleDescendents() {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
-        TreeRecord parent = tree0.getOrigRecord( "dir0" );
+        TreeDto parent = tree0.getOrigRecord( "dir0" );
         // note: user1
-        Mono<Integer> numDesc = Mono.from( treeService.hasDescendents( parent, user0 ) )
+        Mono<Integer> numDesc = Mono.from( treeRepository.hasDescendents( parent, user0 ) )
                 .map( rec -> rec.get( "count", Integer.class ) );
         StepVerifier.create( numDesc )
                 .expectNext( 2 )
@@ -504,12 +510,12 @@ class TreeServiceTest {
 
         String toDelete = "dir0";
 
-        Flux<UUID> found = treeService.rmDirRecursive( tree0.getOrigRecord( toDelete ), user0 )
+        Flux<UUID> found = treeRepository.rmDirRecursive( tree0.getOrigRecord( toDelete ), user0 )
                 .sort();
         Iterable<UUID> expected = Stream.of(
                         "dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" )
                 .map( p -> tree0.getOrigRecord( p ) )
-                .map( TreeRecord::getObjectId )
+                .map( TreeDto::getObjectId )
                 .sorted()
                 .toList();
         StepVerifier.create( found )
@@ -518,9 +524,9 @@ class TreeServiceTest {
 
         assertEquals( Stream.of( tree0.getOrigRecord( "" ),
                                 tree0.getOrigRecord( "file0" ) )
-                        .sorted( TreeRecordComparators.compareByObjectId() )
+                        .sorted( TreeDtoComparators.compareByObjectId() )
                         .toList(),
-                tree0.fetchAllUserObjects( TreeRecordComparators.compareByObjectId() ) );
+                tree0.fetchAllUserObjects( TreeDtoComparators.compareByObjectId() ) );
         assertNoChanges( tree1 );
     }
 
@@ -530,14 +536,14 @@ class TreeServiceTest {
     void rmNormalDeletesRecordAndReturnsObjectId(String toDelete) {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
-        TreeRecord recToDelete = tree0.getOrigRecord( toDelete );
+        TreeDto recToDelete = tree0.getOrigRecord( toDelete );
 
-        StepVerifier.create( treeService.rmNormal( recToDelete, user0 ) )
+        StepVerifier.create( treeRepository.rmNormal( recToDelete, user0 ) )
                 .expectNext( recToDelete.getObjectId() )
                 .verifyComplete();
 
-        List<TreeRecord> found = tree0.fetchAllUserObjects( TreeRecordComparators.compareByObjectId() );
-        List<TreeRecord> expected = tree0.getTrackedObjects( TreeRecordComparators.compareByObjectId() )
+        List<TreeDto> found = tree0.fetchAllUserObjects( TreeDtoComparators.compareByObjectId() );
+        List<TreeDto> expected = tree0.getTrackedObjects( TreeDtoComparators.compareByObjectId() )
                 .stream()
                 .filter( r -> !r.equals( recToDelete ) ).toList();
         assertIterableEquals( expected, found );
@@ -548,8 +554,8 @@ class TreeServiceTest {
     @Test
     @DisplayName("isObjectType returns true when tested with correct obj type")
     void isObjectTypeReturnsTrueWhenExpectedType() {
-        BiFunction<ObjectType, TreeRecord, Boolean> isObject = (ObjectType ot, TreeRecord tr) ->
-                Mono.from( treeService.isObjectType( ot, tr, user0 ) ).map( Record1::value1 ).block();
+        BiFunction<ObjectType, TreeDto, Boolean> isObject = (ObjectType ot, TreeDto tr) ->
+                Mono.from( treeRepository.isObjectType( ot, tr, user0 ) ).map( Record1::value1 ).block();
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         tree0.getTrackedObjects().forEach( rec ->
                 assertTrue( isObject.apply( rec.getObjectType(), rec ) ) );
@@ -558,8 +564,8 @@ class TreeServiceTest {
     @Test
     @DisplayName("isObjectType returns false when incorrect objectType")
     void isObjectTypeReturnsFalseWhenIncorrectObjectType() {
-        BiFunction<ObjectType, TreeRecord, Boolean> isObject = (ObjectType ot, TreeRecord tr) ->
-                Mono.from( treeService.isObjectType( ot, tr, user0 ) ).map( Record1::value1 ).block();
+        BiFunction<ObjectType, TreeDto, Boolean> isObject = (ObjectType ot, TreeDto tr) ->
+                Mono.from( treeRepository.isObjectType( ot, tr, user0 ) ).map( Record1::value1 ).block();
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         ObjectType[] objects = ObjectType.values();
         tree0.getTrackedObjects().forEach( rec -> {
@@ -571,8 +577,8 @@ class TreeServiceTest {
     @Test
     @DisplayName("isObjectType returns false when incorrect userId")
     void isObjectTypeReturnsFalseWhenWrongUserId() {
-        BiFunction<ObjectType, TreeRecord, Boolean> isObject = (ObjectType ot, TreeRecord tr) ->
-                Mono.from( treeService.isObjectType( ot, tr, user1 ) ).map( Record1::value1 ).block();
+        BiFunction<ObjectType, TreeDto, Boolean> isObject = (ObjectType ot, TreeDto tr) ->
+                Mono.from( treeRepository.isObjectType( ot, tr, user1 ) ).map( Record1::value1 ).block();
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         tree0.getTrackedObjects().forEach( rec ->
                 assertFalse( isObject.apply( rec.getObjectType(), rec ) ) );

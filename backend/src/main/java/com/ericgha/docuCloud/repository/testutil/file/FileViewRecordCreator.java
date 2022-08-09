@@ -1,8 +1,8 @@
 package com.ericgha.docuCloud.repository.testutil.file;
 
 import com.ericgha.docuCloud.dto.CloudUser;
+import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.jooq.tables.records.FileViewRecord;
-import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 import lombok.NonNull;
 
 import java.util.ArrayList;
@@ -27,11 +27,11 @@ public class FileViewRecordCreator {
 
     private static final String CHECKSUM_PREFIX = "file";
 
-    public static List<FileViewRecord> create(List<TreeRecord> treeRecords, CloudUser cloudUser, Comparator<FileViewRecord> outputComparator) {
+    public static List<FileViewRecord> create(List<TreeDto> treeDtos, CloudUser cloudUser, Comparator<FileViewRecord> outputComparator) {
         List<FileViewRecord> fvRecords = new ArrayList<>();
-        for (int i = 0; i < treeRecords.size(); i++) {
-            var tr = treeRecords.get(i);
-            fvRecords.add( create(treeRecords.get(i),
+        for (int i = 0; i < treeDtos.size(); i++) {
+            var tr = treeDtos.get(i);
+            fvRecords.add( create(treeDtos.get(i),
                     cloudUser, i) );
         }
         fvRecords.sort(outputComparator);
@@ -39,9 +39,9 @@ public class FileViewRecordCreator {
     }
 
     // Index is used to set checksum and size values.  See class description
-    public static FileViewRecord create(@NonNull TreeRecord treeRecord, @NonNull CloudUser cloudUser, long index) {
+    public static FileViewRecord create(@NonNull TreeDto treeDto, @NonNull CloudUser cloudUser, long index) {
         var fvRec = new FileViewRecord();
-        fvRec.setObjectId( treeRecord.getObjectId() );
+        fvRec.setObjectId( treeDto.getObjectId() );
         fvRec.setFileId( UUID.randomUUID() );
         fvRec.setUserId( cloudUser.getUserId() );
         fvRec.setChecksum( CHECKSUM_PREFIX + index );

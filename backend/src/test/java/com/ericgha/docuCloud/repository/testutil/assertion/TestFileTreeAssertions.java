@@ -1,8 +1,8 @@
 package com.ericgha.docuCloud.repository.testutil.assertion;
 
-import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
+import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
-import com.ericgha.docuCloud.util.comparators.TreeRecordComparators;
+import com.ericgha.docuCloud.util.comparators.TreeDtoComparators;
 import org.jooq.postgres.extensions.types.Ltree;
 
 import java.util.List;
@@ -16,24 +16,24 @@ import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
  /** A collection of assertions to verify specificity of mutation operations
   * on a {@link TestFileTree} and therefore the database.  Methods are designed
-  * to test that mutation <em>did not</em> occur to certain database records.
+  * to test that mutation <em>did not</em> occur to certain database dtos.
  **/
 public class TestFileTreeAssertions {
 
     static public void assertNoChanges(TestFileTree tree) {
-        List<TreeRecord> found = tree.fetchAllUserObjects( TreeRecordComparators.compareByObjectId());
-        List<TreeRecord> expected = tree.getTrackedObjects(TreeRecordComparators.compareByObjectId());
+        List<TreeDto> found = tree.fetchAllUserObjects( TreeDtoComparators.compareByObjectId());
+        List<TreeDto> expected = tree.getTrackedObjects( TreeDtoComparators.compareByObjectId());
         assertIterableEquals( found, expected );
     }
 
     static public void assertNoChangesFor(TestFileTree tree, Ltree... paths) {
-        Map<Ltree, TreeRecord> curObjects = tree.fetchAllUserObjects()
+        Map<Ltree, TreeDto> curObjects = tree.fetchAllUserObjects()
                 .stream()
                 .collect( Collectors.toMap(
-                        TreeRecord::getPath,
-                        record -> record ) );
+                        TreeDto::getPath,
+                        dto -> dto ) );
         Stream.of( paths )
-                .forEach( p -> assertEquals( tree.getOrigRecord( p ), curObjects.get( p ),
+                .forEach( p -> assertEquals( getOrigRecordOrThrow( p, tree ), curObjects.get( p ),
                         "Records didn't match for path " + p ) );
     }
 
@@ -43,6 +43,11 @@ public class TestFileTreeAssertions {
         assertNoChangesFor( tree, paths );
     }
 
-
-
+    private static TreeDto getOrigRecordOrThrow(Ltree path, TestFileTree tree) throws AssertionError {
+        try {
+            return tree.getOrigRecord( path );
+        } catch (IllegalArgumentException e) {
+            throw new AssertionError(String.format("Path %s could not be located", path), e);
+        }
+    }
 }

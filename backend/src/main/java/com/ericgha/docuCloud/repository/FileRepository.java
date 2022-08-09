@@ -1,11 +1,11 @@
 package com.ericgha.docuCloud.repository;
 
 import com.ericgha.docuCloud.dto.CloudUser;
+import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.records.FileRecord;
 import com.ericgha.docuCloud.jooq.tables.records.FileViewRecord;
 import com.ericgha.docuCloud.jooq.tables.records.TreeJoinFileRecord;
-import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 import org.jooq.DeleteResultStep;
@@ -27,10 +27,10 @@ import static org.jooq.impl.DSL.*;
 
 @Service
 @RequiredArgsConstructor
-public class FileService {
+public class FileRepository {
 
     private final DSLContext dsl;
-    private final TreeService treeService;
+    private final TreeRepository treeRepository;
 
     // TODO ensure no ref to non file objects
     // TODO ensure each file has object degree >= 1
@@ -38,11 +38,11 @@ public class FileService {
     // TODO
 
     // TODO isObjectType test
-    public Mono<Long> linkExistingFile(FileRecord fileRecord, TreeRecord treeRecord, CloudUser cloudUser) {
-        SelectConditionStep<Record1<Boolean>> isFile = treeService.isObjectType( ObjectType.FILE, treeRecord, cloudUser );
+    public Mono<Long> linkExistingFile(FileRecord fileRecord, TreeDto treeDto, CloudUser cloudUser) {
+        SelectConditionStep<Record1<Boolean>> isFile = treeRepository.isObjectType( ObjectType.FILE, treeDto, cloudUser );
 
         return Mono.from( dsl.insertInto( TREE_JOIN_FILE )
-                        .select( dsl.select( val( treeRecord.getObjectId(), UUID.class ), val( fileRecord.getFileId(), UUID.class ), currentOffsetDateTime() )
+                        .select( dsl.select( val( treeDto.getObjectId(), UUID.class ), val( fileRecord.getFileId(), UUID.class ), currentOffsetDateTime() )
                                 .where( val( true, Boolean.class ).eq( isFile ) ) ) )
                 .map( (Number num) -> (long) num );
     }

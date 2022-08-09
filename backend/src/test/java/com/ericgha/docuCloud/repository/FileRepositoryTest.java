@@ -24,12 +24,12 @@ import java.util.UUID;
 
 @SpringBootTest
 @EnabledPostgresTestContainer
-class FileServiceTest {
+class FileRepositoryTest {
     @Autowired
     private DSLContext dsl;
 
     @Autowired
-    private FileService fileService;
+    private FileRepository fileRepository;
 
     private final FileViewRecordToFileRecord fvrTofr = new FileViewRecordToFileRecord();
 

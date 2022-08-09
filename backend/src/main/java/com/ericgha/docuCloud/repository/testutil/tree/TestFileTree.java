@@ -1,9 +1,9 @@
 package com.ericgha.docuCloud.repository.testutil.tree;
 
 import com.ericgha.docuCloud.dto.CloudUser;
+import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
-import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
-import com.ericgha.docuCloud.repository.TreeService;
+import com.ericgha.docuCloud.repository.TreeRepository;
 import lombok.Getter;
 import lombok.NonNull;
 import org.jooq.postgres.extensions.types.Ltree;
@@ -16,10 +16,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
- * A class and collection of methods useful for testing {@link TreeService} queries.
+ * A class and collection of methods useful for testing {@link TreeRepository} queries.
  * Test user's file trees can be easily created with stored state
  * representing the expected state of the tree in absence of mutating operations.  Additionally,
  * methods to fetch the current state of the tree are provided.  While queries are performed
@@ -28,7 +27,7 @@ import java.util.stream.Collectors;
  **/
 public class TestFileTree {
 
-    private final Map<Ltree, TreeRecord> recordByPath;
+    private final Map<Ltree, TreeDto> dtoByPath;
     @Getter
     private final UUID userId;
     private final TreeTestQueries testQueries;
@@ -39,7 +38,7 @@ public class TestFileTree {
     TestFileTree(@NonNull UUID userId, @NonNull TreeTestQueries testQueries) {
         this.userId = userId;
         this.testQueries = testQueries;
-        this.recordByPath = new HashMap<>();
+        this.dtoByPath = new HashMap<>();
     }
 
     public TestFileTree(CloudUser user, TreeTestQueries testQueries) {
@@ -47,85 +46,82 @@ public class TestFileTree {
     }
 
     @Nullable
-    public TreeRecord getOrigRecord(Ltree path) {
-        var orig = recordByPath.get( path );
-        if (Objects.isNull( orig ) ) {
-            return null;
+    public TreeDto getOrigRecord(Ltree path) throws IllegalArgumentException {
+        TreeDto dto = dtoByPath.get( path );
+        if (Objects.isNull( dto ) ) {
+            throw new IllegalArgumentException("Instance has not created an instance with specified path");
         }
         // copy doesn't copy objectId...
-        var copy = orig.copy();
-        copy.setObjectId( orig.getObjectId() );
-        return copy;
+        return dto;
     }
 
     @Nullable
-    public TreeRecord getOrigRecord(@NonNull String pathStr) {
-        return getOrigRecord( Ltree.valueOf( pathStr ) );
+    public TreeDto getOrigRecord(@NonNull String pathStr) {
+        var record = getOrigRecord( Ltree.valueOf( pathStr ) );
+        if (Objects.isNull(record)) {
+            throw new IllegalArgumentException("No object with specified path was created by this instance.");
+        }
+        return record;
     }
 
     @Nullable
-    public TreeRecord fetchCurRecord(UUID objectId) {
+    public TreeDto fetchCurRecord(UUID objectId) {
         return testQueries.getByObjectId( objectId );
     }
-    // Parses objectId from tree record, ignores all other info
+    // Parses objectId from tree dto, ignores all other info
 
-    public TreeRecord fetchCurRecord(TreeRecord origRecord) {
+    public TreeDto fetchCurRecord(TreeDto origRecord) {
         if (Objects.isNull( origRecord.getObjectId() ) ) {
-            throw new IllegalArgumentException("Received a TreeRecord with a null objectId");
+            throw new IllegalArgumentException("Received a TreeDto with a null objectId");
         }
         return fetchCurRecord(origRecord.getObjectId() );
     }
 
-    public List<TreeRecord> fetchAllUserObjects() {
+    public List<TreeDto> fetchAllUserObjects() {
         return testQueries.getAllUserObjects(userId);
     }
 
-    public List<TreeRecord> fetchAllUserObjects(@NonNull Comparator<TreeRecord> comparator) {
-        List<TreeRecord> records = testQueries.getAllUserObjects(userId);
-        records.sort(comparator);
-        return records;
+    public List<TreeDto> fetchAllUserObjects(@NonNull Comparator<TreeDto> comparator) {
+        List<TreeDto> dtos = testQueries.getAllUserObjects(userId);
+        dtos.sort(comparator);
+        return dtos;
     }
 
-    public TreeRecord fetchByObjectPath(@NonNull String pathStr) {
+    public TreeDto fetchByObjectPath(@NonNull String pathStr) {
         return testQueries.getByObjectPath( pathStr, userId );
     }
 
     // returns objects in unspecified order;
-    public List<TreeRecord> getTrackedObjects() {
-        return this.recordByPath.values().stream()
-                .map( r -> {
-                    var copy = r.copy();
-                    copy.setObjectId( r.getObjectId() );
-                    return copy;
-                } ).collect( Collectors.toCollection( ArrayList::new ) );
+    public List<TreeDto> getTrackedObjects() {
+        return new ArrayList<>( this.dtoByPath.values() );
     }
 
-    public List<TreeRecord> getTrackedObjectsOfType(ObjectType objectType) {
+    public List<TreeDto> getTrackedObjectsOfType(ObjectType objectType) {
         return this.getTrackedObjects().stream()
                 .filter(rec -> rec.getObjectType() == objectType)
                 .toList();
     }
 
     // returns objects in order specified by comparator
-    public List<TreeRecord> getTrackedObjects(@NonNull Comparator<TreeRecord> comparator) {
-        List<TreeRecord> records = this.getTrackedObjects();
-        records.sort(comparator);
-        return records;
+    public List<TreeDto> getTrackedObjects(@NonNull Comparator<TreeDto> comparator) {
+        List<TreeDto> dtos = this.getTrackedObjects();
+        dtos.sort(comparator);
+        return dtos;
     }
 
-    public TreeRecord add(@NonNull ObjectType objectType, @NonNull Ltree path) {
+    public TreeDto add(@NonNull ObjectType objectType, @NonNull Ltree path) {
         return testQueries.create(objectType, path, userId)
-                .doOnNext(record -> {
-                    if (!Objects.isNull(recordByPath.put(record.getPath(), record) ) )  {
+                .doOnNext(dto -> {
+                    if (!Objects.isNull(dtoByPath.put(dto.getPath(), dto) ) )  {
                     throw new IllegalStateException("Duplicate insert");
                 }})
                 .block();
     }
-    public TreeRecord add(ObjectType objectType, @NonNull String pathStr) {
+    public TreeDto add(ObjectType objectType, @NonNull String pathStr) {
         return add(objectType, Ltree.valueOf( pathStr ) );
     }
 
-    public List<TreeRecord> addFromCsv(String csv) {
+    public List<TreeDto> addFromCsv(String csv) {
         return testFileTreeCsvParser.parse( csv )
                 .map( csvRecord -> this.add( csvRecord.objectType(), csvRecord.path() ) )
                 .toList();

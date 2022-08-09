@@ -1,6 +1,7 @@
 package com.ericgha.docuCloud.repository.testutil.tree;
 
 import com.ericgha.docuCloud.dto.CloudUser;
+import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
@@ -68,7 +69,7 @@ public class TestFileTreeTest {
         String pathStr = "";
         ObjectType objectType = ObjectType.ROOT;
         var testTree = treeFactory.construct( user0 );
-        TreeRecord newRecord = testTree.add( objectType, pathStr);
+        TreeDto newRecord = testTree.add( objectType, pathStr);
         assertEquals(newRecord, testTree.getOrigRecord( "" ) );
         assertEquals( pathStr, newRecord.getPath().data() );
         assertEquals(  objectType, newRecord.getObjectType() );
@@ -81,7 +82,7 @@ public class TestFileTreeTest {
         String pathStr = "";
         ObjectType objectType = ObjectType.ROOT;
         var testTree = treeFactory.construct( user0 );
-        TreeRecord newRecord = testTree.add( objectType, pathStr);
+        TreeDto newRecord = testTree.add( objectType, pathStr);
         assertEquals( newRecord, testTree.getOrigRecord( "" ) );
     }
 
@@ -129,9 +130,9 @@ public class TestFileTreeTest {
     @DisplayName( "assertNoChangesFor throws when tracked object modified" )
     void assertNoChangesForThrowsWhenUntrackedObjectCreated() {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
-        TreeRecord modified = tree0.getOrigRecord( "dir0" );
+        TreeRecord modified = tree0.getOrigRecord( "dir0" ).intoTreeRecord();
         modified.setCreatedAt( OffsetDateTime.now() );
-        treeTestQueries.update(modified)
+        treeTestQueries.update(modified.into(TreeDto.class) )
                 .block();
         assertThrows(AssertionError.class, () -> assertNoChangesFor( tree0, "", "dir0", "file0", "dir0.dir1",
                 "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1") );
@@ -145,7 +146,7 @@ public class TestFileTreeTest {
                 """;
         TreeTestQueries testQueriesMock = Mockito.mock(TreeTestQueries.class);
         Mockito.when( testQueriesMock.create( any(ObjectType.class), any( Ltree.class), any(UUID.class) ) )
-                .thenAnswer( invocation -> Mono.just(new TreeRecord(null, null, invocation.getArgument(1), null, null) ) );
+                .thenAnswer( invocation -> Mono.just(new TreeDto(null, null, invocation.getArgument(1), null, null) ) );
 
         ArgumentCaptor<ObjectType> typeCaptor = ArgumentCaptor.forClass(ObjectType.class);
         ArgumentCaptor<Ltree> ltreeCaptor = ArgumentCaptor.forClass( Ltree.class );
@@ -170,7 +171,7 @@ public class TestFileTreeTest {
         List<String> expected = List.of("dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3");
         List<String> found = tree0.getTrackedObjectsOfType( ObjectType.DIR )
                 .stream()
-                .map( TreeRecord::getPath )
+                .map( TreeDto::getPath )
                 .map(Ltree::data)
                 .sorted()
                 .toList();
@@ -178,12 +179,12 @@ public class TestFileTreeTest {
     }
 
     @Test
-    @DisplayName( "fetchByObjectPath fetches expected TreeRecord" )
+    @DisplayName( "fetchByObjectPath fetches expected TreeDto" )
     void fetchByObjectPath() {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
-        TreeRecord expected = tree0.getOrigRecord( "dir0.dir1.dir2" );
-        TreeRecord found = tree0.fetchByObjectPath( "dir0.dir1.dir2" );
+        TreeDto expected = tree0.getOrigRecord( "dir0.dir1.dir2" );
+        TreeDto found = tree0.fetchByObjectPath( "dir0.dir1.dir2" );
         assertEquals(expected, found);
     }
 }

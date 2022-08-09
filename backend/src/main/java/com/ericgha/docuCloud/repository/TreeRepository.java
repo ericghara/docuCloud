@@ -1,6 +1,7 @@
 package com.ericgha.docuCloud.repository;
 
 import com.ericgha.docuCloud.dto.CloudUser;
+import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.Tree;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
@@ -30,7 +31,7 @@ import static org.jooq.impl.DSL.*;
 
 @Service
 @RequiredArgsConstructor
-public class TreeService {
+public class TreeRepository {
 
     private final DSLContext dsl;
 
@@ -38,25 +39,25 @@ public class TreeService {
     // for testing the objectmapper will be NO-OP but for production will conver to Tree pojo
 
     @Transactional
-    public Mono<TreeRecord> create(TreeRecord treeRecord, CloudUser cloudUser) {
+    public Mono<TreeDto> create(TreeDto treeDto, CloudUser cloudUser) {
         return Mono.from( dsl.insertInto( TREE )
                 .set( TREE.OBJECT_ID, UUID.randomUUID() )
-                .set( TREE.OBJECT_TYPE, treeRecord.getObjectType() )
-                .set( TREE.PATH, treeRecord.getPath() )
+                .set( TREE.OBJECT_TYPE, treeDto.getObjectType() )
+                .set( TREE.PATH, treeDto.getPath() )
                 .set( TREE.USER_ID, cloudUser.getUserId() )
                 .set( TREE.CREATED_AT, defaultValue( OffsetDateTime.class ) )
-                .returning( asterisk() )
-        );
+                .returning( asterisk() ) )
+                .map(treeRecord -> treeRecord.into( TreeDto.class) );
     }
 
     @Transactional
-    public Mono<Long> mvFile(Ltree newPath, TreeRecord treeRecord, CloudUser cloudUser) {
-        if (treeRecord.getObjectType() != ObjectType.FILE) {
+    public Mono<Long> mvFile(Ltree newPath, TreeDto treeDto, CloudUser cloudUser) {
+        if (treeDto.getObjectType() != ObjectType.FILE) {
             return Mono.empty();
         }
         return Mono.from( dsl.update( TREE )
                         .set( TREE.PATH, newPath )
-                        .where( TREE.OBJECT_ID.eq( treeRecord.getObjectId() )
+                        .where( TREE.OBJECT_ID.eq( treeDto.getObjectId() )
                                 .and( TREE.USER_ID.eq( cloudUser.getUserId() ) )
                                 .and( TREE.OBJECT_TYPE.eq( ObjectType.FILE ) ) )
                 )
@@ -65,7 +66,7 @@ public class TreeService {
     }
 
     @Transactional
-    public Mono<Long> mvDir(Ltree newPath, TreeRecord curRecord, CloudUser cloudUser) {
+    public Mono<Long> mvDir(Ltree newPath, TreeDto curRecord, CloudUser cloudUser) {
         if (curRecord.getObjectType() != ObjectType.DIR) {
             return Mono.empty();
         }
@@ -81,7 +82,7 @@ public class TreeService {
     }
 
     @Transactional
-    public Flux<UUID> rmDirRecursive(TreeRecord record, CloudUser cloudUser) {
+    public Flux<UUID> rmDirRecursive(TreeDto record, CloudUser cloudUser) {
         if (record.getObjectType() != ObjectType.DIR) {
             return Flux.empty();
         }
@@ -94,7 +95,7 @@ public class TreeService {
     }
 
     @Transactional
-    public Mono<UUID> rmNormal(TreeRecord record, CloudUser cloudUser) {
+    public Mono<UUID> rmNormal(TreeDto record, CloudUser cloudUser) {
         // Doesn't perform internal check of proper objectType as a creating a subtree from a spoofed file is not expensive
         SelectJoinStep<Record1<Integer>> doDel = hasDescendents( record, cloudUser );
         return Mono.from(
@@ -107,7 +108,7 @@ public class TreeService {
 
 
     @Transactional
-    public Flux<Record3<UUID, UUID, ObjectType>> cpDir(Ltree destination, TreeRecord sourceRecord, CloudUser cloudUser) {
+    public Flux<Record3<UUID, UUID, ObjectType>> cpDir(Ltree destination, TreeDto sourceRecord, CloudUser cloudUser) {
         if (sourceRecord.getObjectType() != ObjectType.DIR) {
             return Flux.empty();
         }
@@ -117,7 +118,7 @@ public class TreeService {
 
     @Transactional
     // Returning ObjectType is a compromise for code usability with cpDir, it will of course always be ObjectType.FILE
-    public Mono<Record3<UUID, UUID, ObjectType>> cpFile(Ltree destination, TreeRecord sourceRecord, CloudUser cloudUser) {
+    public Mono<Record3<UUID, UUID, ObjectType>> cpFile(Ltree destination, TreeDto sourceRecord, CloudUser cloudUser) {
         if (sourceRecord.getObjectType() != ObjectType.FILE) {
             return Mono.empty();
         }
@@ -126,7 +127,7 @@ public class TreeService {
     }
 
     // the purpose of this query is to check that the source is owned by the user
-    SelectConditionStep<Record2<Ltree, Integer>> selectDirPathAndLevel(TreeRecord curRecord, CloudUser cloudUser) {
+    SelectConditionStep<Record2<Ltree, Integer>> selectDirPathAndLevel(TreeDto curRecord, CloudUser cloudUser) {
         return dsl.select( TREE.PATH.as( "path" ),
                         nlevel( TREE.PATH ).as( "level" ) )
                 .from( TREE )
@@ -134,7 +135,7 @@ public class TreeService {
                         .and( TREE.OBJECT_TYPE.eq( ObjectType.DIR ) ) );
     }
 
-    ResultQuery<Record2<UUID, Ltree>> createMovePath(Ltree newPath, TreeRecord curRecord, CloudUser cloudUser) {
+    ResultQuery<Record2<UUID, Ltree>> createMovePath(Ltree newPath, TreeDto curRecord, CloudUser cloudUser) {
         CommonTableExpression<Record2<Ltree, Integer>> oldPathCte = name( "oldPath" ).fields( "path", "level" )
                 .as( selectDirPathAndLevel( curRecord, cloudUser ) );
         return dsl.with( oldPathCte ).select( TREE.OBJECT_ID,
@@ -147,7 +148,7 @@ public class TreeService {
                         ltreeIsparent( oldPathCte.field( "path", Ltree.class ), TREE.PATH ) ) );
     }
 
-    SelectConditionStep<Record1<UUID>> selectDescendents(TreeRecord record, CloudUser cloudUser) {
+    SelectConditionStep<Record1<UUID>> selectDescendents(TreeDto record, CloudUser cloudUser) {
         return dsl.select( TREE.OBJECT_ID )
                 .from( TREE )
                 .where( TREE.USER_ID.eq( cloudUser.getUserId() )
@@ -160,7 +161,7 @@ public class TreeService {
        1 - found object that has no descendents (except self),
        2 - object has 1 or more descendents (in addition to self)
      */
-    SelectJoinStep<Record1<Integer>> hasDescendents(TreeRecord record, CloudUser cloudUser) {
+    SelectJoinStep<Record1<Integer>> hasDescendents(TreeDto record, CloudUser cloudUser) {
         // went to CTE because in jOOQ seemed a little easier
         var selectDescCte = name( "descendents" )
                 .fields( "count" )
@@ -174,7 +175,7 @@ public class TreeService {
                 .from( selectDescCte );
     }
 
-    SelectConditionStep<Record1<Ltree>> selectPath(TreeRecord record, CloudUser cloudUser) {
+    SelectConditionStep<Record1<Ltree>> selectPath(TreeDto record, CloudUser cloudUser) {
         return dsl.select( TREE.PATH )
                 .from( TREE )
                 .where( TREE.OBJECT_ID.eq( record.getObjectId() )
@@ -201,7 +202,7 @@ public class TreeService {
     // Does not includes self (parent)
     // Creates new uuid and new timestamp, and converts path, other fields remain the same;
     SelectConditionStep<Record6<UUID, UUID, ObjectType, Ltree, UUID, OffsetDateTime>> fetchDirCopyRecords(
-            Ltree destination, TreeRecord sourceRecord, CloudUser cloudUser) {
+            Ltree destination, TreeDto sourceRecord, CloudUser cloudUser) {
         CommonTableExpression<Record2<Ltree, Integer>> oldPathCte = name( "oldPath" ).fields( "path", "level" )
                 .as( selectDirPathAndLevel( sourceRecord, cloudUser ) );
         return dsl.with( oldPathCte ).select( TREE.OBJECT_ID.as( "source_id" ),
@@ -217,7 +218,7 @@ public class TreeService {
     }
 
     SelectConditionStep<Record6<UUID, UUID, ObjectType, Ltree, UUID, OffsetDateTime>> fetchFileCopyRecords(
-            Ltree destination, TreeRecord sourceRecord, CloudUser cloudUser) {
+            Ltree destination, TreeDto sourceRecord, CloudUser cloudUser) {
         return dsl.select(
                         TREE.OBJECT_ID.as( "source_id" ),
                         uuidGenerateV4().as( TREE.OBJECT_ID ), TREE.OBJECT_TYPE,
@@ -228,10 +229,10 @@ public class TreeService {
                         .and( TREE.OBJECT_TYPE.eq( ObjectType.FILE ) ) );
     }
 
-    SelectConditionStep<Record1<Boolean>> isObjectType(ObjectType objectType, TreeRecord treeRecord, CloudUser cloudUser) {
+    SelectConditionStep<Record1<Boolean>> isObjectType(ObjectType objectType, TreeDto treeDto, CloudUser cloudUser) {
         return dsl.select( when( count( Tree.TREE.OBJECT_ID ).eq( 0 ), false ).otherwise( true ) )
                 .from( Tree.TREE )
-                .where( Tree.TREE.OBJECT_ID.eq( treeRecord.getObjectId() )
+                .where( Tree.TREE.OBJECT_ID.eq( treeDto.getObjectId() )
                         .and( Tree.TREE.OBJECT_TYPE.eq( objectType ) )
                         .and( Tree.TREE.USER_ID.eq( cloudUser.getUserId() ) ) );
     }

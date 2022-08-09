@@ -1,10 +1,10 @@
 package com.ericgha.docuCloud.repository.testutil.file;
 
 import com.ericgha.docuCloud.dto.CloudUser;
+import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.records.FileViewRecord;
 import com.ericgha.docuCloud.jooq.tables.records.TreeJoinFileRecord;
-import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTreeFactory;
 import com.ericgha.docuCloud.repository.testutil.tree.TreeTestQueries;
@@ -84,14 +84,14 @@ class FileTestQueriesTest {
 
     @Test
     void recordsByUser() {
-        List<TreeRecord> treeRecords0 = tree0.getTrackedObjectsOfType( ObjectType.FILE );
+        List<TreeDto> treeDtos0 = tree0.getTrackedObjectsOfType( ObjectType.FILE );
         List<FileViewRecord> fvr0 = queries.createFilesWithLinks(
-                        FileViewRecordCreator.create( treeRecords0, user0, fvrComparator ), fvrComparator )
+                        FileViewRecordCreator.create( treeDtos0, user0, fvrComparator ), fvrComparator )
                 .collectList()
                 .block();
-        List<TreeRecord> treeRecords1 = tree1.getTrackedObjectsOfType( ObjectType.FILE );
+        List<TreeDto> treeDtos1 = tree1.getTrackedObjectsOfType( ObjectType.FILE );
         List<FileViewRecord> fvr1 = queries.createFilesWithLinks(
-                        FileViewRecordCreator.create( treeRecords1, user1, fvrComparator ), fvrComparator )
+                        FileViewRecordCreator.create( treeDtos1, user1, fvrComparator ), fvrComparator )
                 .collectList()
                 .block();
         StepVerifier.create( queries.fetchRecordsByUserId( user0, fvrComparator ) )
@@ -105,9 +105,9 @@ class FileTestQueriesTest {
     @Test
     @DisplayName("fetchLink fetches the expected link")
     void fetchLinkReturnsLink() {
-        List<TreeRecord> treeRecords = tree0.getTrackedObjectsOfType( ObjectType.FILE );
+        List<TreeDto> treeDtos = tree0.getTrackedObjectsOfType( ObjectType.FILE );
         Disposable createdLinks = queries.createFilesWithLinks(
-                        FileViewRecordCreator.create( treeRecords, user0, fvrComparator ), fvrComparator )
+                        FileViewRecordCreator.create( treeDtos, user0, fvrComparator ), fvrComparator )
                 .subscribe( fvr -> {
                     FileViewRecord found = Mono.from( queries.fetchFileViewRecord( fvr ) ).block();
                     // using property of FileViewRecordCreator where size is index in input array
@@ -118,11 +118,11 @@ class FileTestQueriesTest {
     @Test
     @DisplayName("createLinks creates the expected link")
     void createLinksCreatesLink() {
-        List<TreeRecord> treeRecords = tree0.getTrackedObjectsOfType( ObjectType.FILE );
-        FileViewRecord initialFile = FileViewRecordCreator.create( treeRecords.get( 0 ),
+        List<TreeDto> treeDtos = tree0.getTrackedObjectsOfType( ObjectType.FILE );
+        FileViewRecord initialFile = FileViewRecordCreator.create( treeDtos.get( 0 ),
                 user0, 0 );
         queries.createFilesWithLinks( List.of( initialFile ), fvrComparator ).blockLast(); // insert a file
-        FileViewRecord linkToFile = new FileViewRecord().setObjectId( treeRecords.get( 1 ).getObjectId() ).setFileId( initialFile.getFileId() )
+        FileViewRecord linkToFile = new FileViewRecord().setObjectId( treeDtos.get( 1 ).getObjectId() ).setFileId( initialFile.getFileId() )
                 .setUserId( initialFile.getUserId() );
         Flux<TreeJoinFileRecord> createdLink = queries.createLinks( List.of( linkToFile ), tjfComparator );
         StepVerifier.create( createdLink ).assertNext( tjfR -> {
@@ -136,14 +136,14 @@ class FileTestQueriesTest {
 
     @Test
     void fetchFileLinkingDegree() {
-        List<TreeRecord> treeRecords = tree0.getTrackedObjectsOfType( ObjectType.FILE );
+        List<TreeDto> treeDtos = tree0.getTrackedObjectsOfType( ObjectType.FILE );
         // create 2 1 degree links
-        List<FileViewRecord> newFileRecords = FileViewRecordCreator.create( treeRecords.subList( 0, 2 ), user0, FileViewRecordComparators.compareByObjectIdFileId() );
+        List<FileViewRecord> newFileRecords = FileViewRecordCreator.create( treeDtos.subList( 0, 2 ), user0, FileViewRecordComparators.compareByObjectIdFileId() );
         queries.createFilesWithLinks( newFileRecords, fvrComparator ).blockLast();
         // add 2 more links to 2nd.  Degree 2nd = 3;
         List<FileViewRecord> extraLinks = IntStream.range( 0, 2 ).boxed()
                 .map( i -> new FileViewRecord().setFileId( newFileRecords.get( 1 ).getFileId() )
-                        .setObjectId( treeRecords.get( 2 + i ).getObjectId() )
+                        .setObjectId( treeDtos.get( 2 + i ).getObjectId() )
                         .setUserId( user0.getUserId() ) )
                 .toList();
         queries.createLinks( extraLinks, tjfComparator ).blockLast();
@@ -159,8 +159,8 @@ class FileTestQueriesTest {
 
     @Test
     void createFilesWithLinks() {
-        List<TreeRecord> treeRecords = tree0.getTrackedObjectsOfType( ObjectType.FILE );
-        List<FileViewRecord> newFileRecords = FileViewRecordCreator.create( treeRecords, user0, fvrComparator );
+        List<TreeDto> treeDtos = tree0.getTrackedObjectsOfType( ObjectType.FILE );
+        List<FileViewRecord> newFileRecords = FileViewRecordCreator.create( treeDtos, user0, fvrComparator );
         Flux<FileViewRecord> createdFileRecords = queries.createFilesWithLinks( newFileRecords, fvrComparator );
         StepVerifier.create( createdFileRecords ).thenConsumeWhile( fvRec -> {
             int index = fvRec.getSize().intValue(); // remember size is used internally as index by FileViewRecordCreator
@@ -178,17 +178,17 @@ class FileTestQueriesTest {
 
     @Test
     void fetchObjectLinkingDegree() {
-        // linking degree will become index number in treeRecords
-        List<TreeRecord> treeRecords = tree0.getTrackedObjectsOfType( ObjectType.FILE );
+        // linking degree will become index number in treeDtos
+        List<TreeDto> treeDtos = tree0.getTrackedObjectsOfType( ObjectType.FILE );
         List<FileViewRecord> toCreate = IntStream.range( 0, 4 ).boxed().flatMap(
-                        i -> FileViewRecordCreator.create( treeRecords.subList( 4 - i, 4 ), user0, fvrComparator ).stream() )
+                        i -> FileViewRecordCreator.create( treeDtos.subList( 4 - i, 4 ), user0, fvrComparator ).stream() )
                 .toList();
         queries.createFilesWithLinks( toCreate, fvrComparator ).blockLast();
         List<Record2<UUID, Long>> degree = queries.fetchObjectLinkingDegreeByObjectId( user0 )
                 .sort( Comparator.comparing( rec2 -> rec2.get( "count", Long.class ) ) )
                 .collectList().block();
         degree.forEach( rec2 -> assertEquals(
-                treeRecords.get( rec2.get( "count", Long.class ).intValue() ).getObjectId(),
+                treeDtos.get( rec2.get( "count", Long.class ).intValue() ).getObjectId(),
                 rec2.get( FILE_VIEW.OBJECT_ID ) ) );
     }
 }
