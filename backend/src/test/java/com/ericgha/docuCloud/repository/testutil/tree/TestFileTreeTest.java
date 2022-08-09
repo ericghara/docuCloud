@@ -130,7 +130,7 @@ public class TestFileTreeTest {
     @DisplayName( "assertNoChangesFor throws when tracked object modified" )
     void assertNoChangesForThrowsWhenUntrackedObjectCreated() {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
-        TreeRecord modified = tree0.getOrigRecord( "dir0" ).intoTreeRecord();
+        TreeRecord modified = tree0.getOrigRecord( "dir0" ).intoRecord();
         modified.setCreatedAt( OffsetDateTime.now() );
         treeTestQueries.update(modified.into(TreeDto.class) )
                 .block();

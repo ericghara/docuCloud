@@ -168,7 +168,7 @@ class TreeRepositoryTest {
         // a "challenge" tree with same paths but different user
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
-        TreeRecord spoofedRecord = tree0.getOrigRecord( "dir0.dir1.dir2" ).intoTreeRecord();
+        TreeRecord spoofedRecord = tree0.getOrigRecord( "dir0.dir1.dir2" ).intoRecord();
         spoofedRecord.setObjectType( ObjectType.FILE ); // force db to handle objectType check;
         Ltree newPath = Ltree.valueOf( "dir0.dir3.dir2" );
         Long rowsChanged = treeRepository.mvFile( newPath, spoofedRecord.into( TreeDto.class ), user0 ).block();
@@ -197,7 +197,7 @@ class TreeRepositoryTest {
         for (String path : List.of( "dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" )) {
             String expectedNewPath = path.replace( "dir0", "dir100" );
             TreeRecord expectedNewRecord = tree0.getOrigRecord( path )
-                    .intoTreeRecord();
+                    .intoRecord();
             expectedNewRecord.setPath( Ltree.valueOf( expectedNewPath ) );
             assertEquals( expectedNewRecord.into( TreeDto.class ), tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
         }
@@ -223,7 +223,7 @@ class TreeRepositoryTest {
         for (String path : List.of( "dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" )) {
             String expectedNewPath = path.replace( "dir0", "dir100" );
             TreeRecord expectedNewRecord = tree0.getOrigRecord( path )
-                    .intoTreeRecord();
+                    .intoRecord();
             expectedNewRecord.setPath( Ltree.valueOf( expectedNewPath ) );
             assertEquals( expectedNewRecord.into( TreeDto.class ), tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
         }
@@ -251,7 +251,7 @@ class TreeRepositoryTest {
         for (String path : List.of( "dir0.dir3", "dir0.dir3.file1" )) {
             String expectedNewPath = path.replace( "dir0.dir3", "dir0.dir1.dir2.dir3" );
             TreeRecord expectedNewRecord = tree0.getOrigRecord( path )
-                    .intoTreeRecord();
+                    .intoRecord();
             expectedNewRecord.setPath( Ltree.valueOf( expectedNewPath ) );
             assertEquals( expectedNewRecord.into( TreeDto.class ), tree0.fetchCurRecord( tree0.getOrigRecord( path ) ) );
         }
@@ -267,7 +267,7 @@ class TreeRepositoryTest {
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
 
         TreeRecord origRecord = tree0.getOrigRecord( "dir0.dir3.file1" )
-                .intoTreeRecord();
+                .intoRecord();
         origRecord.setObjectType( ObjectType.DIR ); // spoofed object type;
         Ltree movePath = Ltree.valueOf( "file1" );
 
@@ -315,7 +315,7 @@ class TreeRepositoryTest {
     void fetchDirCopyRecordsDoesNotFetchSpoofedObjectType() {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         TreeRecord source = tree0.getOrigRecord( "dir0.dir3.file1" )
-                .intoTreeRecord();
+                .intoRecord();
         source.setObjectType( ObjectType.DIR );
         Ltree destination = Ltree.valueOf( "dir0.dir1.dir2.dir3" );
         StepVerifier.create( treeRepository.fetchDirCopyRecords( destination, source.into( TreeDto.class ), user0 ) )
@@ -407,7 +407,7 @@ class TreeRepositoryTest {
         String srcStr = "dir0.dir1";
         String destStr = "dir0.file100";
         TreeRecord srcRecord = tree0.getOrigRecord( srcStr )
-                .intoTreeRecord();
+                .intoRecord();
         srcRecord.setObjectType( ObjectType.FILE ); // spoofed object type
         var record = Mono.from(
                 treeRepository.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord.into(TreeDto.class), user0 ) );
