@@ -12,9 +12,9 @@ import java.util.Locale;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class TextToLabelTest {
+class pathStrToEncodedLtreeTest {
 
-    private final TextToLabel formatter = new TextToLabel();
+    private final PathStrToEncodedLtree formatter = new PathStrToEncodedLtree();
 
     @ParameterizedTest
     @DisplayName( "Parse returns the expected value for propery formatted text inputs" )

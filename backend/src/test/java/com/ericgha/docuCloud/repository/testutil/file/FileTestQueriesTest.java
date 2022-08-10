@@ -8,8 +8,6 @@ import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTreeFactory;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
-import com.ericgha.docuCloud.util.comparators.FileViewDtoComparators;
-import com.ericgha.docuCloud.util.comparators.TreeJoinFileDtoComparators;
 import jakarta.annotation.PostConstruct;
 import org.jooq.DSLContext;
 import org.jooq.Record2;
@@ -21,12 +19,14 @@ import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import reactor.util.function.Tuple2;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.List;
@@ -34,6 +34,7 @@ import java.util.UUID;
 import java.util.stream.IntStream;
 
 import static com.ericgha.docuCloud.jooq.Tables.FILE_VIEW;
+import static com.ericgha.docuCloud.repository.testutil.assertion.OffsetDateTimeAssertion.assertPastDateTimeWithinLast;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
@@ -48,8 +49,6 @@ class FileTestQueriesTest {
             FILE, "dir0.file3"
             """;
 
-    private static final Comparator<FileViewDto> fvrComparator = FileViewDtoComparators.compareBySizeObjectId();
-    private static final Comparator<TreeJoinFileDto> tjfComparator = TreeJoinFileDtoComparators.sortByObjectIdFileIdLinkedAt();
     @Autowired
     private DSLContext dsl;
 
@@ -85,18 +84,18 @@ class FileTestQueriesTest {
     void recordsByUser() {
         List<TreeDto> treeDtos0 = tree0.getTrackedObjectsOfType( ObjectType.FILE );
         List<FileViewDto> fvr0 = queries.createFilesWithLinks(
-                        FileViewDtoCreator.create( treeDtos0, user0, fvrComparator ), fvrComparator )
+                        FileViewDtoCreator.create( treeDtos0, user0) )
                 .collectList()
                 .block();
         List<TreeDto> treeDtos1 = tree1.getTrackedObjectsOfType( ObjectType.FILE );
         List<FileViewDto> fvr1 = queries.createFilesWithLinks(
-                        FileViewDtoCreator.create( treeDtos1, user1, fvrComparator ), fvrComparator )
+                        FileViewDtoCreator.create( treeDtos1, user1 ) )
                 .collectList()
                 .block();
-        StepVerifier.create( queries.fetchRecordsByUserId( user0, fvrComparator ) )
+        StepVerifier.create( queries.fetchRecordsByUserId( user0) )
                 .expectNextSequence( fvr0 )
                 .verifyComplete();
-        StepVerifier.create( queries.fetchRecordsByUserId( user1, fvrComparator ) )
+        StepVerifier.create( queries.fetchRecordsByUserId( user1) )
                 .expectNextSequence( fvr1 )
                 .verifyComplete();
     }
@@ -106,7 +105,7 @@ class FileTestQueriesTest {
     void fetchLinkReturnsLink() {
         List<TreeDto> treeDtos = tree0.getTrackedObjectsOfType( ObjectType.FILE );
         Disposable createdLinks = queries.createFilesWithLinks(
-                        FileViewDtoCreator.create( treeDtos, user0, fvrComparator ), fvrComparator )
+                        FileViewDtoCreator.create( treeDtos, user0 ) )
                 .subscribe( fvr -> {
                     FileViewDto found = Mono.from( queries.fetchFileViewDto( fvr ) ).block();
                     // using property of FileViewDtoCreator where size is index in input array
@@ -120,13 +119,13 @@ class FileTestQueriesTest {
         List<TreeDto> treeDtos = tree0.getTrackedObjectsOfType( ObjectType.FILE );
         FileViewDto initialFile = FileViewDtoCreator.create( treeDtos.get( 0 ),
                 user0, 0 );
-        queries.createFilesWithLinks( List.of( initialFile ), fvrComparator ).blockLast(); // insert a file
+        queries.createFilesWithLinks( List.of( initialFile ) ).blockLast(); // insert a file
         FileViewDto linkToFile = FileViewDto.builder()
                 .objectId( treeDtos.get( 1 ).getObjectId() )
                 .fileId( initialFile.getFileId() )
                 .userId( initialFile.getUserId() )
                 .build();
-        Flux<TreeJoinFileDto> createdLink = queries.createLinks( List.of( linkToFile ), tjfComparator );
+        Flux<TreeJoinFileDto> createdLink = queries.createLinks( List.of( linkToFile ) );
         StepVerifier.create( createdLink ).assertNext( tjfR -> {
                     assertEquals( linkToFile.getObjectId(), tjfR.getObjectId() );
                     assertEquals( linkToFile.getFileId(), tjfR.getFileId() );
@@ -140,8 +139,8 @@ class FileTestQueriesTest {
     void fetchFileLinkingDegree() {
         List<TreeDto> treeDtos = tree0.getTrackedObjectsOfType( ObjectType.FILE );
         // create 2 1 degree links
-        List<FileViewDto> newFileRecords = FileViewDtoCreator.create( treeDtos.subList( 0, 2 ), user0, FileViewDtoComparators.compareByObjectIdFileId() );
-        queries.createFilesWithLinks( newFileRecords, fvrComparator ).blockLast();
+        List<FileViewDto> newFileRecords = FileViewDtoCreator.create( treeDtos.subList( 0, 2 ), user0 );
+        queries.createFilesWithLinks( newFileRecords ).blockLast();
         // add 2 more links to 2nd.  Degree 2nd = 3;
         List<FileViewDto> extraLinks = IntStream.range( 0, 2 ).boxed()
                 .map( i -> FileViewDto.builder()
@@ -150,7 +149,7 @@ class FileTestQueriesTest {
                         .userId( user0.getUserId() )
                         .build() )
                 .toList();
-        queries.createLinks( extraLinks, tjfComparator ).blockLast();
+        queries.createLinks( extraLinks ).blockLast();
         List<Record2<UUID, Long>> degreeByFileId = queries.fetchFileLinkingDegreeByFileId( user0 )
                 .sort( Comparator.comparing( rec2 -> rec2.get( "count", Long.class ) ) )
                 .collectList()
@@ -164,18 +163,22 @@ class FileTestQueriesTest {
     @Test
     void createFilesWithLinks() {
         List<TreeDto> treeDtos = tree0.getTrackedObjectsOfType( ObjectType.FILE );
-        List<FileViewDto> newFileRecords = FileViewDtoCreator.create( treeDtos, user0, fvrComparator );
-        Flux<FileViewDto> createdFileRecords = queries.createFilesWithLinks( newFileRecords, fvrComparator );
-        StepVerifier.create( createdFileRecords ).thenConsumeWhile( fvRec -> {
-            int index = fvRec.getSize().intValue(); // remember size is used internally as index by FileViewDtoCreator
-            assertEquals( newFileRecords.get( index ).getObjectId(), fvRec.getObjectId(), "Unexpected object_id" );
-            assertNotNull( fvRec.getFileId(), "file_id was null" );
-            assertEquals( newFileRecords.get( index ).getUserId(), fvRec.getUserId(), "Unexpected user_id" );
-            assertTrue( OffsetDateTime.now().isAfter( fvRec.getUploadedAt() ) &&
-                    OffsetDateTime.now().minusSeconds( 1 ).isBefore( fvRec.getUploadedAt() ), "unexpected uploaded_at time" );
-            assertEquals( fvRec.getUploadedAt(), fvRec.getLinkedAt(), "unexpected linked_at time" );
-            assertEquals( newFileRecords.get( index ).getChecksum(), fvRec.getChecksum(), "unexpected checksum" );
-            //size field tested implicitly by using as index.
+        List<FileViewDto> expectedRecords = FileViewDtoCreator.create( treeDtos, user0);
+        List<FileViewDto> createdFileRecords = queries.createFilesWithLinks( expectedRecords )
+                .collectList()
+                .block();
+        Flux<Tuple2<FileViewDto, FileViewDto>> zip = Flux.zip(Flux.fromIterable( expectedRecords ),
+                Flux.fromIterable( createdFileRecords ) );
+        StepVerifier.create( zip ).thenConsumeWhile( expFnd -> {
+            FileViewDto expected = expFnd.getT1();
+            FileViewDto found = expFnd.getT2();
+            assertEquals( expected.getObjectId(), found.getObjectId(), "Unexpected object_id" );
+            assertNotNull( found.getFileId(), "file_id was null" );
+            assertEquals( expected.getUserId(), found.getUserId(), "Unexpected user_id" );
+            assertPastDateTimeWithinLast(found.getUploadedAt(), Duration.ofSeconds(1) );
+            assertPastDateTimeWithinLast(found.getUploadedAt(), Duration.ofSeconds(1) );
+            assertEquals( expected.getChecksum(), found.getChecksum(), "unexpected checksum" );
+            assertEquals( expected.getSize(), found.getSize() );
             return true;
         } ).verifyComplete();
     }
@@ -185,9 +188,9 @@ class FileTestQueriesTest {
         // linking degree will become index number in treeDtos
         List<TreeDto> treeDtos = tree0.getTrackedObjectsOfType( ObjectType.FILE );
         List<FileViewDto> toCreate = IntStream.range( 0, 4 ).boxed().flatMap(
-                        i -> FileViewDtoCreator.create( treeDtos.subList( 4 - i, 4 ), user0, fvrComparator ).stream() )
+                        i -> FileViewDtoCreator.create( treeDtos.subList( 4 - i, 4 ), user0 ).stream() )
                 .toList();
-        queries.createFilesWithLinks( toCreate, fvrComparator ).blockLast();
+        queries.createFilesWithLinks( toCreate ).blockLast();
         List<Record2<UUID, Long>> degree = queries.fetchObjectLinkingDegreeByObjectId( user0 )
                 .sort( Comparator.comparing( rec2 -> rec2.get( "count", Long.class ) ) )
                 .collectList().block();

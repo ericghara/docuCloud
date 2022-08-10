@@ -7,7 +7,7 @@ import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.springframework.context.annotation.Profile;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -20,7 +20,7 @@ import static org.jooq.impl.DSL.asterisk;
 import static org.jooq.impl.DSL.defaultValue;
 
 @RequiredArgsConstructor
-@Repository
+@Component
 @Profile("test")
 public class TreeTestQueries {
 

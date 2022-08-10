@@ -77,13 +77,9 @@ public class TestFileTree {
         return fetchCurRecord(origRecord.getObjectId() );
     }
 
-    public List<TreeDto> fetchAllUserObjects() {
-        return testQueries.getAllUserObjects(userId);
-    }
-
-    public List<TreeDto> fetchAllUserObjects(@NonNull Comparator<TreeDto> comparator) {
+    public List<TreeDto> fetchAllUserObjects( ) {
         List<TreeDto> dtos = testQueries.getAllUserObjects(userId);
-        dtos.sort(comparator);
+        dtos.sort(Comparator.naturalOrder());
         return dtos;
     }
 
@@ -92,9 +88,6 @@ public class TestFileTree {
     }
 
     // returns objects in unspecified order;
-    public List<TreeDto> getTrackedObjects() {
-        return new ArrayList<>( this.dtoByPath.values() );
-    }
 
     public List<TreeDto> getTrackedObjectsOfType(ObjectType objectType) {
         return this.getTrackedObjects().stream()
@@ -103,9 +96,9 @@ public class TestFileTree {
     }
 
     // returns objects in order specified by comparator
-    public List<TreeDto> getTrackedObjects(@NonNull Comparator<TreeDto> comparator) {
-        List<TreeDto> dtos = this.getTrackedObjects();
-        dtos.sort(comparator);
+    public List<TreeDto> getTrackedObjects() {
+        List<TreeDto> dtos = new ArrayList<>( this.dtoByPath.values() );
+        dtos.sort(Comparator.naturalOrder());
         return dtos;
     }
 

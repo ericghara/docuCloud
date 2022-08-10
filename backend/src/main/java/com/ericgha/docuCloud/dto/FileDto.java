@@ -11,6 +11,7 @@ import lombok.ToString;
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.UUID;
 
 @RequiredArgsConstructor
@@ -18,7 +19,7 @@ import java.util.UUID;
 @Getter
 @EqualsAndHashCode
 @ToString
-public class FileDto implements Serializable {
+public class FileDto implements Serializable, Comparable<FileDto> {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -36,6 +37,16 @@ public class FileDto implements Serializable {
     }
 
     public static FileDto fromRecord(@NonNull FileRecord record) {
-        return record.into(FileDto.class);
+        return record.into( FileDto.class );
+    }
+
+    private static final Comparator<FileDto> COMPARATOR =
+            Comparator.comparing( FileDto::getFileId )
+                    .thenComparing( FileDto::getChecksum )
+                    .thenComparing( FileDto::getSize )
+                    .thenComparing( FileDto::getUploadedAt );
+
+    public int compareTo(@NonNull FileDto other) {
+        return COMPARATOR.compare( this, other );
     }
 }

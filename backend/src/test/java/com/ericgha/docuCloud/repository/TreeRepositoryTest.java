@@ -54,7 +54,6 @@ class TreeRepositoryTest {
 
     @Autowired
     TestFileTreeFactory treeFactory;
-    TreeDtoComparators treeDtoComparators;
 
     @Autowired
     DSLContext dsl;
@@ -526,7 +525,7 @@ class TreeRepositoryTest {
                                 tree0.getOrigRecord( "file0" ) )
                         .sorted( TreeDtoComparators.compareByObjectId() )
                         .toList(),
-                tree0.fetchAllUserObjects( TreeDtoComparators.compareByObjectId() ) );
+                tree0.fetchAllUserObjects( ) );
         assertNoChanges( tree1 );
     }
 
@@ -542,8 +541,8 @@ class TreeRepositoryTest {
                 .expectNext( recToDelete.getObjectId() )
                 .verifyComplete();
 
-        List<TreeDto> found = tree0.fetchAllUserObjects( TreeDtoComparators.compareByObjectId() );
-        List<TreeDto> expected = tree0.getTrackedObjects( TreeDtoComparators.compareByObjectId() )
+        List<TreeDto> found = tree0.fetchAllUserObjects( );
+        List<TreeDto> expected = tree0.getTrackedObjects( )
                 .stream()
                 .filter( r -> !r.equals( recToDelete ) ).toList();
         assertIterableEquals( expected, found );

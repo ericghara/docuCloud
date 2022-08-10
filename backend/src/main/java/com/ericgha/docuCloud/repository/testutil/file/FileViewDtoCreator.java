@@ -25,14 +25,14 @@ public class FileViewDtoCreator {
 
     private static final String CHECKSUM_PREFIX = "file";
 
-    public static List<FileViewDto> create(List<TreeDto> treeDtos, CloudUser cloudUser, Comparator<FileViewDto> outputComparator) {
+    public static List<FileViewDto> create(List<TreeDto> treeDtos, CloudUser cloudUser) {
         List<FileViewDto> fvRecords = new ArrayList<>();
         for (int i = 0; i < treeDtos.size(); i++) {
             var tr = treeDtos.get( i );
             fvRecords.add( create( treeDtos.get( i ),
                     cloudUser, i ) );
         }
-        fvRecords.sort( outputComparator );
+        fvRecords.sort(Comparator.naturalOrder() );
         return fvRecords;
     }
 

@@ -11,6 +11,7 @@ import lombok.ToString;
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.UUID;
 
 @RequiredArgsConstructor
@@ -18,7 +19,7 @@ import java.util.UUID;
 @Getter
 @EqualsAndHashCode
 @ToString
-public class TreeJoinFileDto implements Serializable {
+public class TreeJoinFileDto implements Serializable, Comparable<TreeJoinFileDto> {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -37,4 +38,13 @@ public class TreeJoinFileDto implements Serializable {
                 .setFileId( fileId )
                 .setLinkedAt( linkedAt );
     }
+
+    private static final Comparator<TreeJoinFileDto> COMPARATOR = Comparator.comparing( TreeJoinFileDto::getObjectId )
+            .thenComparing( TreeJoinFileDto::getFileId )
+            .thenComparing( TreeJoinFileDto::getLinkedAt );
+
+    public int compareTo(@NonNull TreeJoinFileDto other ) {
+        return COMPARATOR.compare( this, other );
+    }
+
 }

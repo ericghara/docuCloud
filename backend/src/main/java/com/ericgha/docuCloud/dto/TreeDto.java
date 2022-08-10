@@ -14,6 +14,7 @@ import org.jooq.postgres.extensions.types.Ltree;
 import java.io.Serial;
 import java.io.Serializable;
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -22,7 +23,7 @@ import java.util.UUID;
 @Getter
 @EqualsAndHashCode
 @ToString
-public final class TreeDto implements Serializable {
+public final class TreeDto implements Serializable, Comparable<TreeDto> {
 
     @Serial
     private static final long serialVersionUID = 1L;
@@ -50,5 +51,16 @@ public final class TreeDto implements Serializable {
             return null;
         }
         return path.data();
+    }
+
+    private static final Comparator<TreeDto> COMPARATOR = Comparator.comparing( TreeDto::getObjectId )
+            .thenComparing(TreeDto::getObjectType)
+            // jOOQ's Ltree class doesn't implement comparable...
+            .thenComparing(TreeDto::getPathStr)
+            .thenComparing( TreeDto::getUserId )
+            .thenComparing( TreeDto::getCreatedAt );
+
+    public int compareTo(@NonNull TreeDto other) {
+        return COMPARATOR.compare(this, other);
     }
 }

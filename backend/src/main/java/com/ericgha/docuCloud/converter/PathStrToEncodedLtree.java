@@ -4,6 +4,7 @@ package com.ericgha.docuCloud.converter;
 import lombok.extern.slf4j.Slf4j;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.springframework.format.Formatter;
+import org.springframework.stereotype.Component;
 
 import java.text.ParseException;
 import java.util.Locale;
@@ -15,7 +16,8 @@ import java.util.Objects;
  * of non-letter ASCII printable characters by encoding them alphanumerically.
  */
 @Slf4j
-public class TextToLabel implements Formatter<Ltree> {
+@Component
+public class PathStrToEncodedLtree implements Formatter<Ltree> {
 
     static final char IDENTIFIER = 'ǃ'; // this is a 'Latin Letter Retroflex Click' character
     static final char SEPARATOR = '/'; // character that should be mapped to '.' the ltree separator

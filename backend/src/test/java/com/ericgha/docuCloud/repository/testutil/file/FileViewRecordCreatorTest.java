@@ -3,7 +3,6 @@ package com.ericgha.docuCloud.repository.testutil.file;
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.FileViewDto;
 import com.ericgha.docuCloud.dto.TreeDto;
-import com.ericgha.docuCloud.util.comparators.FileViewDtoComparators;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -63,7 +62,7 @@ class FileViewDtoCreatorTest {
 
         try (MockedStatic<FileViewDtoCreator> creatorMock = mockStatic( FileViewDtoCreator.class,
                 withSettings().defaultAnswer( CALLS_REAL_METHODS ) )) {
-            assertEquals( 5, FileViewDtoCreator.create( treeDtos, user0, FileViewDtoComparators.compareByObjectIdFileId() ).size() );
+            assertEquals( 5, FileViewDtoCreator.create( treeDtos, user0 ).size() );
             creatorMock.verify( () -> FileViewDtoCreator.create(
                             recordCaptor.capture(), userCaptor.capture(), longCaptor.capture() ),
                     times( 5 ) );
