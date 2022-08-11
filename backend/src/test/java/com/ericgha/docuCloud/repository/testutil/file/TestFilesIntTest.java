@@ -83,27 +83,27 @@ class TestFilesIntTest {
     }
 
     @Test
-    @DisplayName( "insertFileViewRecord creates a new file record linked to expected object" )
+    @DisplayName("insertFileViewRecord creates a new file record linked to expected object")
     void InsertFileViewRecordNewFile() {
         String checksum = "fileRes0";
         String objPath = "fileObj0";
         TestFiles files0 = fileFactory.construct( tree0 );
         files0.insertFileViewRecord( objPath, checksum );
-        Flux<FileViewDto> found = fileQueries.fetchRecordsByChecksum(checksum, tree0.getUserId() );
+        Flux<FileViewDto> found = fileQueries.fetchRecordsByChecksum( checksum, tree0.getUserId() );
         UUID expectedObjectId = tree0.fetchByObjectPath( objPath ).getObjectId();
         StepVerifier.create( found ).assertNext( fvr -> {
-            assertEquals(expectedObjectId, fvr.getObjectId() );
-            assertNotNull(fvr.getFileId() );
-            assertEquals(tree0.getUserId(), fvr.getUserId() );
-            assertPastDateTimeWithinLast(fvr.getUploadedAt(), Duration.ofSeconds(1) );
-            assertPastDateTimeWithinLast(fvr.getLinkedAt(), Duration.ofSeconds(1) );
-            assertEquals(0L, fvr.getSize() );
-        } )
-        .verifyComplete();
+                    assertEquals( expectedObjectId, fvr.getObjectId() );
+                    assertNotNull( fvr.getFileId() );
+                    assertEquals( tree0.getUserId(), fvr.getUserId() );
+                    assertPastDateTimeWithinLast( fvr.getUploadedAt(), Duration.ofSeconds( 1 ) );
+                    assertPastDateTimeWithinLast( fvr.getLinkedAt(), Duration.ofSeconds( 1 ) );
+                    assertEquals( 0L, fvr.getSize() );
+                } )
+                .verifyComplete();
     }
 
     @Test
-    @DisplayName( "insertFileViewRecord adds a link to an existing file" )
+    @DisplayName("insertFileViewRecord adds a link to an existing file")
     void InsertFileViewRecordExistingFile() {
         String checksum = "fileRes0";
         String initialObj = "fileObj0";
@@ -116,14 +116,14 @@ class TestFilesIntTest {
         List<FileViewDto> expectedNewLink = fileQueries.fetchRecordsByObjectId( tree0.fetchByObjectPath( newObj ).getObjectId() )
                 .collectList()
                 .block();
-        assertIterableEquals( expectedNewLink, List.of(foundNewLink) );
+        assertIterableEquals( expectedNewLink, List.of( foundNewLink ) );
         // fetch orignal link and pull out file record
         List<FileDto> origFile = fileQueries.fetchRecordsByObjectId( tree0.fetchByObjectPath( initialObj ).getObjectId() )
                 .map( fileViewToFile::convert )
                 .collectList()
                 .block();
         // test both orig and new link point to the same file
-        assertEquals( origFile, List.of(fileViewToFile.convert(foundNewLink) ) );
+        assertEquals( origFile, List.of( fileViewToFile.convert( foundNewLink ) ) );
     }
 
     @Test
@@ -137,13 +137,13 @@ class TestFilesIntTest {
         // challenge record
         files1.insertFileViewRecord( objPath, checksum );
         NavigableMap<String, NavigableSet<FileViewDto>> allFileViews = files0.getOrigFileViewsGroupedByPath();
-        assertEquals(1, allFileViews.size() );
+        assertEquals( 1, allFileViews.size() );
         Iterable<FileViewDto> expectedFileView = fileQueries.fetchRecordsByUserId( user0 )
                 .toIterable();
-        assertIterableEquals( expectedFileView, allFileViews.get(objPath) );
+        assertIterableEquals( expectedFileView, allFileViews.get( objPath ) );
         NavigableMap<String, NavigableSet<TreeDto>> allTreeDtos = files0.getLinkedTreeObjectsByChecksum();
-        assertEquals(1, allTreeDtos.size() );
-        assertIterableEquals( List.of(tree0.getOrigRecord(objPath)), allTreeDtos.get(checksum) );
+        assertEquals( 1, allTreeDtos.size() );
+        assertIterableEquals( List.of( tree0.getOrigRecord( objPath ) ), allTreeDtos.get( checksum ) );
     }
 
     @Test
@@ -160,17 +160,17 @@ class TestFilesIntTest {
         // manually create expected map
         TreeMap<String, NavigableSet<TreeDto>> expectedMap = new TreeMap<>();
         NavigableSet<TreeDto> fileRes0Objs = new TreeSet<>();
-        fileRes0Objs.add(tree0.getOrigRecord( "fileObj0" ) );
+        fileRes0Objs.add( tree0.getOrigRecord( "fileObj0" ) );
         NavigableSet<TreeDto> fileRes1Objs = new TreeSet<>();
-        Stream.of("fileObj1", "dir0.fileObj2" ).map(tree0::getOrigRecord ).forEach(fileRes1Objs::add );
-        expectedMap.put("fileRes0", fileRes0Objs);
-        expectedMap.put("fileRes1", fileRes1Objs);
+        Stream.of( "fileObj1", "dir0.fileObj2" ).map( tree0::getOrigRecord ).forEach( fileRes1Objs::add );
+        expectedMap.put( "fileRes0", fileRes0Objs );
+        expectedMap.put( "fileRes1", fileRes1Objs );
 
         assertIterableEquals( expectedMap.entrySet(), files0.fetchTreeDtosGroupedByLinkedFileChecksum().entrySet() );
     }
 
     @Test
-    @DisplayName( "fetchObjectsLinkedTo(string) returns treeDtos linked to checksum" )
+    @DisplayName("fetchObjectsLinkedTo(string) returns treeDtos linked to checksum")
     void fetchObjectsLinkedToChecksumReturnsExpected() {
         String csv = """
                 fileObj0, fileRes0
@@ -182,15 +182,15 @@ class TestFilesIntTest {
         TestFiles files1 = fileFactory.constructFromCsv( tree1, csv );
         // create expected sets
         NavigableSet<TreeDto> expectedFileRes0 = new TreeSet<>();
-        expectedFileRes0.add(tree0.getOrigRecord( "fileObj0" ) );
+        expectedFileRes0.add( tree0.getOrigRecord( "fileObj0" ) );
         NavigableSet<TreeDto> expectedFileRes1 = new TreeSet<>();
-        Stream.of("fileObj1", "dir0.fileObj2" ).map(tree0::getOrigRecord ).forEach(expectedFileRes1::add );
-        assertIterableEquals( expectedFileRes0, files0.fetchObjectsLinkedTo("fileRes0") );
-        assertIterableEquals( expectedFileRes1, files0.fetchObjectsLinkedTo("fileRes1") );
+        Stream.of( "fileObj1", "dir0.fileObj2" ).map( tree0::getOrigRecord ).forEach( expectedFileRes1::add );
+        assertIterableEquals( expectedFileRes0, files0.fetchObjectsLinkedTo( "fileRes0" ) );
+        assertIterableEquals( expectedFileRes1, files0.fetchObjectsLinkedTo( "fileRes1" ) );
     }
 
     @Test
-    @DisplayName( "fetchObjectsLinkedTo(UUID) returns treeDtos linked to FileId" )
+    @DisplayName("fetchObjectsLinkedTo(UUID) returns treeDtos linked to FileId")
     void fetchObjectsLinkedToFileIdReturnsExpected() {
         String csv = """
                 fileObj0, fileRes0
@@ -201,31 +201,31 @@ class TestFilesIntTest {
         // selectivity challenge
         TestFiles files1 = fileFactory.constructFromCsv( tree1, csv );
         // create expected sets
-        NavigableSet<TreeDto> expectedFileRes0 = new TreeSet<>(  );
+        NavigableSet<TreeDto> expectedFileRes0 = new TreeSet<>();
         expectedFileRes0.add( tree0.getOrigRecord( "fileObj0" ) );
-        NavigableSet<TreeDto> expectedFileRes1 = new TreeSet<>(  );
+        NavigableSet<TreeDto> expectedFileRes1 = new TreeSet<>();
         Stream.of( "fileObj1", "dir0.fileObj2" ).map( tree0::getOrigRecord ).forEach( expectedFileRes1::add );
         assertIterableEquals( expectedFileRes0, files0.fetchObjectsLinkedTo( files0.getOrigFileFor( "fileRes0" ).getFileId() ) );
         assertIterableEquals( expectedFileRes1, files0.fetchObjectsLinkedTo( files0.getOrigFileFor( "fileRes1" ).getFileId() ) );
     }
 
     @Test
-    @DisplayName( "fetchFileViewDtosLinkedTo(TreeDto) returns expected FileViewDtos" )
+    @DisplayName("fetchFileViewDtosLinkedTo(TreeDto) returns expected FileViewDtos")
     void fetchFileViewDtosLinkedToTreeDtoReturnsExpected() {
-//        String csv = """
-//                fileObj0, fileRes0
-//                fileObj1, fileRes1
-//                dir0.fileObj2, fileRes1
-//                """;
-//        TestFiles files0 = fileFactory.constructFromCsv( tree0, csv );
-//        // selectivity challenge
-//        TestFiles files1 = fileFactory.constructFromCsv( tree1, csv );
-//        // create expected sets
-//        NavigableSet<FileViewDto> expectedFileRes0 = new TreeSet<>(  );
-//        expectedFileRes0.add( files0.getOrigFileFor( "fileObj0" ) );
-//        NavigableSet<TreeDto> expectedFileRes1 = new TreeSet<>(  );
-//        Stream.of( "fileObj1", "dir0.fileObj2" ).map( tree0::getOrigRecord ).forEach( expectedFileRes1::add );
-//        assertIterableEquals( expectedFileRes0, files0.fetchObjectsLinkedTo( files0.getOrigFileFor( "fileRes0" ).getFileId() ) );
-//        assertIterableEquals( expectedFileRes1, files0.fetchObjectsLinkedTo( files0.getOrigFileFor( "fileRes1" ).getFileId() ) );
+        String csv = """
+                fileObj0, fileRes0
+                fileObj1, fileRes1
+                dir0.fileObj2, fileRes1
+                """;
+        TestFiles files0 = fileFactory.constructFromCsv( tree0, csv );
+        // selectivity challenge
+        TestFiles files1 = fileFactory.constructFromCsv( tree1, csv );
+        // create expected sets
+        assertIterableEquals(files0.fetchFileDtosLinkedTo("fileObj0"),
+                List.of(files0.getOrigFileFor( "fileRes0" ) ) );
+        assertIterableEquals(files0.fetchFileDtosLinkedTo("fileObj1"),
+                List.of(files0.getOrigFileFor( "fileRes1" ) ) );
+        assertIterableEquals(files0.fetchFileDtosLinkedTo("dir0.fileObj2"),
+                List.of(files0.getOrigFileFor( "fileRes1" ) ) );
     }
 }

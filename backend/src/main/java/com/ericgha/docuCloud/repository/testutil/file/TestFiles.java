@@ -204,20 +204,6 @@ public class TestFiles {
         }
     }
 
-    ObjectFileLink createLinkOrFile(CsvRecord csvRecord) {
-        String treePath = csvRecord.treePath();
-        String checksum = csvRecord.fileChecksum();
-        return this.insertFileViewDto( treePath, checksum );
-    }
-
-    // using ObjectId in fileViewDto fetches obj path
-    String fetchObjectPath(FileViewDto fileViewDto) {
-        return Objects.requireNonNull( tree.fetchCurRecord( fileViewDto.getObjectId() ),
-                        "TreeDto does not exist for objectId" )
-                .getPath()
-                .data();
-    }
-
     record ObjectFileLink(TreeDto treeDto, FileViewDto fileViewDto) {
     }
 
