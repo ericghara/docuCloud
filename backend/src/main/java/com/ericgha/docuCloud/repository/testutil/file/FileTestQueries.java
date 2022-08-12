@@ -2,6 +2,7 @@ package com.ericgha.docuCloud.repository.testutil.file;
 
 import com.ericgha.docuCloud.converter.FileViewDtoToTreeJoinFileDto;
 import com.ericgha.docuCloud.dto.CloudUser;
+import com.ericgha.docuCloud.dto.FileDto;
 import com.ericgha.docuCloud.dto.FileViewDto;
 import com.ericgha.docuCloud.dto.TreeJoinFileDto;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
+import static com.ericgha.docuCloud.jooq.Tables.TREE_JOIN_FILE;
+import static com.ericgha.docuCloud.jooq.tables.File.FILE;
 import static com.ericgha.docuCloud.jooq.tables.FileView.FILE_VIEW;
 import static org.jooq.impl.DSL.*;
 
@@ -64,6 +67,14 @@ public class FileTestQueries {
                 .map(FileViewDto::fromRecord);
     }
 
+    public Mono<FileViewDto> fetchRecordByObjectIdChecksum(UUID objectId, String checksum, UUID userId) {
+        return Mono.from( dsl.selectFrom(FILE_VIEW)
+                        .where(FILE_VIEW.OBJECT_ID.eq( objectId )
+                            .and( FILE_VIEW.CHECKSUM.eq(checksum) )
+                            .and(FILE_VIEW.USER_ID.eq( userId ) ) ) )
+                    .map( FileViewDto::fromRecord );
+    }
+
     public Flux<FileViewDto> fetchRecordsByObjectId(UUID objectId) {
         return Flux.from( dsl.selectFrom(FILE_VIEW)
                 .where(FILE_VIEW.OBJECT_ID.eq(objectId) ) )
@@ -97,6 +108,24 @@ public class FileTestQueries {
                 .map(FileViewDto::fromRecord)
                 .map( fileViewToTreeJoinFile::convert );
     }
+
+    public Mono<Long> deleteAllLinksTo(FileDto file) {
+        return Mono.from ( dsl.deleteFrom(TREE_JOIN_FILE)
+                .where(TREE_JOIN_FILE.FILE_ID.eq(file.getFileId() ) ) )
+                // jOOQ actually returns a Long at runtime
+                // while compiler expects an Integer
+                .map( (Number n) -> (long) n );
+    }
+
+    public Mono<Long> deleteFile(FileDto file) {
+        return Mono.from( dsl.deleteFrom( FILE )
+                .where(FILE.FILE_ID.eq(file.getFileId())))
+                // jOOQ actually returns a Long at runtime
+                // while compiler expects an Integer
+                .map( (Number n) -> (long) n);
+    }
+
+
 
     // must provide a full FileViewDto aside from timestamps (uploaded_at, linked_at
     // allows linking to another users object if the table allows...

@@ -25,8 +25,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertions.assertNoChanges;
-import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertions.assertNoChangesFor;
+import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertion.assertNoChanges;
+import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertion.assertNoChangesFor;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;

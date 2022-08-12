@@ -16,8 +16,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -81,7 +79,7 @@ public class TestFilesTest {
         Mockito.when(tree.getOrigRecord(any(String.class))).thenReturn( obj0 );
         Mockito.when(fileQueries.createFileWithLink(any(FileViewDto.class) ) ).thenAnswer( a -> Mono.just(a.getArgument( 0 ) ) );
 
-        TestFiles.ObjectFileLink ofl = testFiles.insertFileViewDto( obj0.getPathStr(), checksum );
+        TestFiles.ObjectFileLink ofl = testFiles.insertFileView( obj0.getPathStr(), checksum );
 
         assertEquals(obj0, ofl.treeDto() );
         FileViewDto foundFileView = ofl.fileViewDto();
@@ -115,7 +113,7 @@ public class TestFilesTest {
                 .thenAnswer( a -> Mono.just(fileView0) );
         ArgumentCaptor<FileViewDto> recordToInsertCapture = ArgumentCaptor.forClass(FileViewDto.class);
         // add a link b/t fileObj1 <-> fileRes0
-        TestFiles.ObjectFileLink link1 = testFiles.insertFileViewDto( pathStr1, checksum );
+        TestFiles.ObjectFileLink link1 = testFiles.insertFileView( pathStr1, checksum );
 
         verify(fileQueries).createLink(recordToInsertCapture.capture() );
         // assert link b/t fileObj1 <-> fileRes0
@@ -140,45 +138,4 @@ public class TestFilesTest {
         assertEquals( fileViewToFile.convert(fileView0), testFiles.getOrigFileFor( checksum ) );
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {
-            "dir0.fileObj0, fileRes0",
-            " dir0.fileObj0, fileRes0 ",
-            "dir0.fileObj0,fileRes0"
-    })
-    @DisplayName("TestFilesCsvParser#parse returns expected CsvRecords -- data lines")
-    void parseReturnsExpectedRecordsData(String csvLine) {
-        String expectedPath = "dir0.fileObj0";
-        String expectedChecksum = "fileRes0";
-        Iterable<TestFiles.CsvRecord> expectedRec = List.of(new TestFiles.CsvRecord( expectedPath, expectedChecksum ) );
-        Iterable<TestFiles.CsvRecord> foundRec = TestFiles.TestFilesCsvParser.parse( csvLine ).toList();
-
-        assertIterableEquals( expectedRec, foundRec );
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {
-            "# comment",
-            "## comment",
-            "# comment, comment, comment",
-            " # # # # comment, comment  "
-    })
-    @DisplayName("TestFilesCsvParser#parse returns expected CsvRecords -- comment lines")
-    void parseReturnsExpectedRecordsComment(String csvLine) {
-        Iterable<TestFiles.CsvRecord> expectedRec = List.of();
-        Iterable<TestFiles.CsvRecord> foundRec = TestFiles.TestFilesCsvParser.parse( csvLine ).toList();
-
-        assertIterableEquals( expectedRec, foundRec );
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {
-            "too, many, rows",
-            "too few rows",
-    })
-    @DisplayName("TestFilesCsvParser#parse throws IllegalStateException when poorly formatted")
-    void parseReturnsThrowsOnBadFormat(String csvLine) {
-        // findAny to make stream hot
-        assertThrows(IllegalArgumentException.class, () -> TestFiles.TestFilesCsvParser.parse( csvLine ).findAny() );
-    }
 }

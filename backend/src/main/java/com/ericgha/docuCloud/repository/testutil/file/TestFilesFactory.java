@@ -20,7 +20,7 @@ public class TestFilesFactory {
         return new TestFiles(tree, fileQueries, fileViewToFile);
     }
 
-    public TestFiles constructFromCsv(TestFileTree tree, String csv) {
+    public TestFiles constructFromCsv(String csv, TestFileTree tree) {
         var testFiles = this.construct(tree);
         testFiles.insertFileViewRecords( csv );
         return testFiles;

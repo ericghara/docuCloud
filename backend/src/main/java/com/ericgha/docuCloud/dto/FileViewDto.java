@@ -19,7 +19,7 @@ import java.util.UUID;
 @Getter
 @EqualsAndHashCode
 @ToString
-public class FileViewDto implements Serializable, Comparable<FileViewDto> {
+public final class FileViewDto implements Serializable, Comparable<FileViewDto>{
 
     @Serial
     private static final long serialVersionUID = 1L;

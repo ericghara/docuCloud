@@ -4,6 +4,7 @@ import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.FileDto;
 import com.ericgha.docuCloud.dto.FileViewDto;
 import com.ericgha.docuCloud.dto.TreeDto;
+import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTreeFactory;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
@@ -32,6 +33,7 @@ import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import static com.ericgha.docuCloud.repository.testutil.assertion.CollectionAssertion.assertCollectionMapsEqual;
 import static com.ericgha.docuCloud.repository.testutil.assertion.OffsetDateTimeAssertion.assertPastDateTimeWithinLast;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -136,12 +138,12 @@ class TestFilesIntTest {
         files0.insertFileViewRecord( objPath, checksum );
         // challenge record
         files1.insertFileViewRecord( objPath, checksum );
-        NavigableMap<String, NavigableSet<FileViewDto>> allFileViews = files0.getOrigFileViewsGroupedByPath();
+        NavigableMap<String, NavigableSet<FileViewDto>> allFileViews = files0.getOrigFileViewsGroupedByPathStr();
         assertEquals( 1, allFileViews.size() );
         Iterable<FileViewDto> expectedFileView = fileQueries.fetchRecordsByUserId( user0 )
                 .toIterable();
         assertIterableEquals( expectedFileView, allFileViews.get( objPath ) );
-        NavigableMap<String, NavigableSet<TreeDto>> allTreeDtos = files0.getLinkedTreeObjectsByChecksum();
+        NavigableMap<String, NavigableSet<TreeDto>> allTreeDtos = files0.getTreeDtosByLinkedFileChecksum();
         assertEquals( 1, allTreeDtos.size() );
         assertIterableEquals( List.of( tree0.getOrigRecord( objPath ) ), allTreeDtos.get( checksum ) );
     }
@@ -154,9 +156,9 @@ class TestFilesIntTest {
                 fileObj1, fileRes1
                 dir0.fileObj2, fileRes1
                 """;
-        TestFiles files0 = fileFactory.constructFromCsv( tree0, csv );
+        TestFiles files0 = fileFactory.constructFromCsv( csv, tree0 );
         // selectivity challenge
-        TestFiles files1 = fileFactory.constructFromCsv( tree1, csv );
+        TestFiles files1 = fileFactory.constructFromCsv( csv, tree1 );
         // manually create expected map
         TreeMap<String, NavigableSet<TreeDto>> expectedMap = new TreeMap<>();
         NavigableSet<TreeDto> fileRes0Objs = new TreeSet<>();
@@ -166,7 +168,7 @@ class TestFilesIntTest {
         expectedMap.put( "fileRes0", fileRes0Objs );
         expectedMap.put( "fileRes1", fileRes1Objs );
 
-        assertIterableEquals( expectedMap.entrySet(), files0.fetchTreeDtosGroupedByLinkedFileChecksum().entrySet() );
+        assertIterableEquals( expectedMap.entrySet(), files0.fetchTreeDtosByLinkedFileChecksum().entrySet() );
     }
 
     @Test
@@ -177,9 +179,9 @@ class TestFilesIntTest {
                 fileObj1, fileRes1
                 dir0.fileObj2, fileRes1
                 """;
-        TestFiles files0 = fileFactory.constructFromCsv( tree0, csv );
+        TestFiles files0 = fileFactory.constructFromCsv( csv, tree0 );
         // selectivity challenge
-        TestFiles files1 = fileFactory.constructFromCsv( tree1, csv );
+        TestFiles files1 = fileFactory.constructFromCsv( csv, tree1 );
         // create expected sets
         NavigableSet<TreeDto> expectedFileRes0 = new TreeSet<>();
         expectedFileRes0.add( tree0.getOrigRecord( "fileObj0" ) );
@@ -197,9 +199,9 @@ class TestFilesIntTest {
                 fileObj1, fileRes1
                 dir0.fileObj2, fileRes1
                 """;
-        TestFiles files0 = fileFactory.constructFromCsv( tree0, csv );
+        TestFiles files0 = fileFactory.constructFromCsv( csv, tree0 );
         // selectivity challenge
-        TestFiles files1 = fileFactory.constructFromCsv( tree1, csv );
+        TestFiles files1 = fileFactory.constructFromCsv( csv, tree1 );
         // create expected sets
         NavigableSet<TreeDto> expectedFileRes0 = new TreeSet<>();
         expectedFileRes0.add( tree0.getOrigRecord( "fileObj0" ) );
@@ -217,9 +219,9 @@ class TestFilesIntTest {
                 fileObj1, fileRes1
                 dir0.fileObj2, fileRes1
                 """;
-        TestFiles files0 = fileFactory.constructFromCsv( tree0, csv );
+        TestFiles files0 = fileFactory.constructFromCsv( csv, tree0 );
         // selectivity challenge
-        TestFiles files1 = fileFactory.constructFromCsv( tree1, csv );
+        TestFiles files1 = fileFactory.constructFromCsv( csv, tree1 );
         // create expected sets
         assertIterableEquals(files0.fetchFileDtosLinkedTo("fileObj0"),
                 List.of(files0.getOrigFileFor( "fileRes0" ) ) );
@@ -227,5 +229,44 @@ class TestFilesIntTest {
                 List.of(files0.getOrigFileFor( "fileRes1" ) ) );
         assertIterableEquals(files0.fetchFileDtosLinkedTo("dir0.fileObj2"),
                 List.of(files0.getOrigFileFor( "fileRes1" ) ) );
+    }
+
+
+    @Test
+    @DisplayName( "fetchFileViewDtosGroupedByObjectPathStr returns the expected map" )
+    void fetchFileViewDtosGroupedByObjectPathStrReturnsExpectedMap() {
+        String csv = """
+                fileObj0, fileRes0
+                fileObj1, fileRes1
+                dir0.fileObj2, fileRes1
+                dir0.fileObj3, fileRes1
+                """;
+        TestFiles files0 = fileFactory.constructFromCsv(csv, tree0);
+        // selectivity challenge
+        TestFiles files1 = fileFactory.constructFromCsv( csv, tree1 );
+        assertCollectionMapsEqual( files0.getOrigFileViewsGroupedByPathStr(), files0.fetchFileViewDtosGroupedByObjectPathStr() );
+    }
+
+    @Test
+    @DisplayName( "fetchFileViewDtosGroupedByObjectPathStr(stream) returns expected records" )
+    void fetchFileViewDtosGroupedByObjectPathStrCreatesMapOfExpectedRecords() {
+        String csv = """
+                fileObj0, fileRes0
+                fileObj1, fileRes1
+                dir0.fileObj2, fileRes1
+                dir0.fileObj3, fileRes1
+                """;
+        TestFiles files0 = fileFactory.constructFromCsv(csv, tree0);
+        // selectivity challenge
+        TestFiles files1 = fileFactory.constructFromCsv( csv, tree1 );
+        var expected = files0.getOrigFileViewsGroupedByPathStr();
+        // add a obj and resource
+        tree0.add(ObjectType.FILE, "fileObj4");
+        files0.insertFileView( "fileObj4", "fileRes0" );
+        // limit wanted to original adjacencies
+        var wanted = ObjectResourceAdjacencyParser.parse(csv);
+        var found = files0.fetchFileViewDtosGroupedByObjectPathStr(wanted);
+        // comapre snapshot before additions to adjacency list without addition
+        assertCollectionMapsEqual( expected, found );
     }
 }

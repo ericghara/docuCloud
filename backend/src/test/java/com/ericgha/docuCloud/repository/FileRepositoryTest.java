@@ -2,7 +2,8 @@ package com.ericgha.docuCloud.repository;
 
 import com.ericgha.docuCloud.converter.FileViewDtoToFileDto;
 import com.ericgha.docuCloud.dto.CloudUser;
-import com.ericgha.docuCloud.repository.testutil.file.FileTestQueries;
+import com.ericgha.docuCloud.repository.testutil.file.TestFiles;
+import com.ericgha.docuCloud.repository.testutil.file.TestFilesFactory;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTreeFactory;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
@@ -34,8 +35,7 @@ class FileRepositoryTest {
     @Autowired
     private TestFileTreeFactory treeFactory;
     @Autowired
-    private FileTestQueries fileQueries;
-
+    private TestFilesFactory fileFactory;
     private final CloudUser user0 = CloudUser.builder()
             .userId( UUID.fromString( "1234567-89ab-cdef-fedc-ba9876543210" ) )
             .username( "unitTester" )
@@ -48,15 +48,26 @@ class FileRepositoryTest {
 
     private static final String TREE_FACTORY_CSV = """
             ROOT, ""
-            FILE, "file0"
-            FILE, "file1"
+            FILE, "fileObj0"
             DIR, "dir0"
-            FILE, "dir0.file2"
-            FILE, "dir0.file3"
+            FILE, "dir0.fileObj1"
+            FILE, "fileObj2"
+            FILE, "dir0.fileObj3"
+            FILE, "fileObj4"
+            """;
+
+    private static final String FILE_FACTORY_CSV = """
+            fileObj0, fileRes0
+            dir0.fileObj1, fileRes0
+            fileObj2, fileRes1
+            # Available objects: dir0.fileObj3, fileObj4
             """;
 
     private TestFileTree tree0;
     private TestFileTree tree1;
+    private TestFiles files0;
+    // selectivity challenge
+    private TestFiles files1;
 
     @BeforeEach
     void before() throws URISyntaxException, IOException {
@@ -67,6 +78,8 @@ class FileRepositoryTest {
         Mono.from( dsl.query( sql ) ).block();
         tree0 = treeFactory.constructFromCsv( TREE_FACTORY_CSV, user0 );
         tree1 = treeFactory.constructFromCsv( TREE_FACTORY_CSV, user1 );
+        files0 = fileFactory.constructFromCsv( FILE_FACTORY_CSV, tree0 );
+        files1 = fileFactory.constructFromCsv( FILE_FACTORY_CSV, tree1 );
     }
 
 //    @Test

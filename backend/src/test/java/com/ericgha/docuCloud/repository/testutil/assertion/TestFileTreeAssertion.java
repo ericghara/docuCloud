@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertIterableEquals;
   * on a {@link TestFileTree} and therefore the database.  Methods are designed
   * to test that mutation <em>did not</em> occur to certain database dtos.
  **/
-public class TestFileTreeAssertions {
+public class TestFileTreeAssertion {
 
     static public void assertNoChanges(TestFileTree tree) {
         List<TreeDto> found = tree.fetchAllUserObjects( );

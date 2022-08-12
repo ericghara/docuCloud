@@ -40,8 +40,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.ericgha.docuCloud.jooq.Tables.TREE;
-import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertions.assertNoChanges;
-import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertions.assertNoChangesFor;
+import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertion.assertNoChanges;
+import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertion.assertNoChangesFor;
 import static org.jooq.impl.DSL.currentOffsetDateTime;
 import static org.junit.jupiter.api.Assertions.*;
 

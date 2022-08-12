@@ -4,9 +4,11 @@ import com.ericgha.docuCloud.dto.FileDto;
 import com.ericgha.docuCloud.dto.FileViewDto;
 import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.jooq.tables.records.FileRecord;
+import com.ericgha.docuCloud.repository.testutil.file.ObjectResourceAdjacencyParser.ObjectResourceAdjacency;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
-import lombok.NonNull;
 import org.springframework.core.convert.converter.Converter;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.GroupedFlux;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
@@ -34,7 +36,7 @@ public class TestFiles {
 
     private final Scheduler blockingSched = Schedulers.newBoundedElastic( 1, 100_000, "blocking-task-scheduler" );
 
-    public TestFiles(TestFileTree tree, FileTestQueries fileQueries, Converter<FileViewDto, FileDto> fileViewToFile ) {
+    public TestFiles(TestFileTree tree, FileTestQueries fileQueries, Converter<FileViewDto, FileDto> fileViewToFile) {
         this.tree = tree;
         this.fileQueries = fileQueries;
         this.fileViewToFile = fileViewToFile;
@@ -46,63 +48,63 @@ public class TestFiles {
     // If file doesn't exist it is created, if file does exist a link is made
     // In the csv the checksum field in file_view is used as a human friendly file key
     public NavigableSet<FileViewDto> insertFileViewRecords(String csv) {
-        return TestFilesCsvParser.parse( csv )
-                .map(csvRecord ->  this.insertFileViewRecord( csvRecord.treePath(), csvRecord.fileChecksum() ) )
+        return ObjectResourceAdjacencyParser.parse( csv )
+                .map( csvRecord -> this.insertFileViewRecord( csvRecord.treePath(), csvRecord.fileChecksum() ) )
                 .collect( Collectors.toCollection(
                         TreeSet::new )
                 );
     }
 
     public FileViewDto insertFileViewRecord(String pathStr, String checksum) {
-         ObjectFileLink link = this.insertFileViewDto( pathStr, checksum );
-         this.recordNewFileViewDto( link );
-         return link.fileViewDto();
+        ObjectFileLink link = this.insertFileView( pathStr, checksum );
+        this.recordNewFileViewDto( link );
+        return link.fileViewDto();
     }
 
     // throws if no files are linked to given path
-    public NavigableSet<FileViewDto> getOrigFileViewsFor(String pathStr ) throws IllegalArgumentException {
-        var records = fileViewDtoByObjectPath.get(pathStr);
-        if (Objects.isNull(records) ) {
-            throw new IllegalArgumentException("No objects at specified path are linked to any objects created by this instance");
+    public NavigableSet<FileViewDto> getOrigFileViewsFor(String pathStr) throws IllegalArgumentException {
+        var records = fileViewDtoByObjectPath.get( pathStr );
+        if (Objects.isNull( records )) {
+            throw new IllegalArgumentException( "No objects at specified path are linked to any objects created by this instance" );
         }
-        return new TreeSet<>(records);
+        return new TreeSet<>( records );
     }
 
-    public NavigableSet<TreeDto> getOrigTreeObjectsFor(String fileChecksum ) throws IllegalArgumentException {
-        var records = treeDtoByChecksum.get(fileChecksum);
-        if (Objects.isNull(records) ) {
-            throw new IllegalArgumentException("No files with the provided checksum are linked to any objects created by this instance");
+    public NavigableSet<TreeDto> getOrigTreeObjectsFor(String fileChecksum) throws IllegalArgumentException {
+        var records = treeDtoByChecksum.get( fileChecksum );
+        if (Objects.isNull( records )) {
+            throw new IllegalArgumentException( "No files with the provided checksum are linked to any objects created by this instance" );
         }
-        return new TreeSet<>(records);
+        return new TreeSet<>( records );
     }
 
     public FileDto getOrigFileFor(String checksum) {
-        var dto = fileDtoByChecksum.get(checksum);
-        if (Objects.isNull( dto ) ) {
-            throw new IllegalArgumentException(String.format("No record was created with the checksum: %s", checksum) );
+        var dto = fileDtoByChecksum.get( checksum );
+        if (Objects.isNull( dto )) {
+            throw new IllegalArgumentException( String.format( "No record was created with the checksum: %s", checksum ) );
         }
         return dto;
     }
 
-    public NavigableMap<String, NavigableSet<FileViewDto>> getOrigFileViewsGroupedByPath() {
+    public NavigableMap<String, NavigableSet<FileViewDto>> getOrigFileViewsGroupedByPathStr() {
         NavigableMap<String, NavigableSet<FileViewDto>> copy = new TreeMap<>();
         fileViewDtoByObjectPath.keySet().forEach( pathStr ->
-            copy.put(pathStr, this.getOrigFileViewsFor(pathStr) )
+                copy.put( pathStr, this.getOrigFileViewsFor( pathStr ) )
         );
         return copy;
     }
 
-    public NavigableMap<String, NavigableSet<TreeDto>> getLinkedTreeObjectsByChecksum() {
+    public NavigableMap<String, NavigableSet<TreeDto>> getTreeDtosByLinkedFileChecksum() {
         NavigableMap<String, NavigableSet<TreeDto>> copy = new TreeMap<>();
         treeDtoByChecksum.keySet().forEach( checksum ->
-            copy.put(checksum, this.getOrigTreeObjectsFor( checksum ) )
+                copy.put( checksum, this.getOrigTreeObjectsFor( checksum ) )
         );
         return copy;
     }
 
     // map where keys are checksums and values are sets of TreeDtos currently linked to (file with) checksum
     // if multiple fileIds have the same checksum this will break, but very unlikely as fileId (UUIDs) are being autogenerated
-    public NavigableMap<String, NavigableSet<TreeDto>> fetchTreeDtosGroupedByLinkedFileChecksum() {
+    public NavigableMap<String, NavigableSet<TreeDto>> fetchTreeDtosByLinkedFileChecksum() {
         NavigableMap<String, NavigableSet<TreeDto>> current = new TreeMap<>();
         fetchUserFileViewDtos().forEach( fvr -> {
             String checksum = fvr.getChecksum();
@@ -114,12 +116,45 @@ public class TestFiles {
         return current;
     }
 
+    public FileViewDto fetchFileViewDto(String pathStr, String checksum) {
+        UUID objectId = tree.fetchByObjectPath( pathStr ).getObjectId();
+        return fileQueries.fetchRecordByObjectIdChecksum( objectId, checksum, tree.getUserId() )
+                .block();
+    }
+
+    public NavigableMap<String, NavigableSet<FileViewDto>> fetchFileViewDtosGroupedByObjectPathStr() {
+        return this.groupByPathStr(
+                fileQueries.fetchRecordsByUserId( tree.getUserId() )
+                        .publishOn( blockingSched ) );
+    }
+
+    public NavigableMap<String, NavigableSet<FileViewDto>> fetchFileViewDtosGroupedByObjectPathStr(
+            Stream<ObjectResourceAdjacency> adjacencies) {
+        Flux<FileViewDto> fileFlux = Flux.fromStream( adjacencies )
+                .publishOn( blockingSched )
+                .map( adj -> this.fetchFileViewDto( adj.treePath(), adj.fileChecksum() ) )
+                .publishOn( blockingSched );
+        return this.groupByPathStr( fileFlux );
+    }
+
+    private NavigableMap<String, NavigableSet<FileViewDto>> groupByPathStr(Flux<FileViewDto> fileViews) {
+        return (NavigableMap<String, NavigableSet<FileViewDto>>) fileViews.groupBy( fileViewDto -> tree.fetchCurRecord( fileViewDto.getObjectId() ).getPathStr(),
+                        fileViewDto -> fileViewDto )
+                .publishOn( blockingSched )
+                .collectMap( GroupedFlux::key,
+                        gf -> gf.collect( () -> (NavigableSet<FileViewDto>) new TreeSet<FileViewDto>(),
+                                (set, dto) -> set.add( dto ) ).block(),
+                        TreeMap::new )
+                .block();
+
+    }
+
 
     // records sorted by fileViewDtoComp provided in constructor
     public NavigableSet<FileViewDto> fetchUserFileViewDtos() {
         UUID userId = tree.getUserId();
         return fileQueries.fetchRecordsByUserId( userId )
-                .collect( () -> new TreeSet<FileViewDto>( ), TreeSet::add )
+                .collect( () -> new TreeSet<FileViewDto>(), TreeSet::add )
                 .block();
     }
 
@@ -128,7 +163,7 @@ public class TestFiles {
         return fileQueries.fetchRecordsByChecksum( checksum, tree.getUserId() )
                 .publishOn( blockingSched )
                 .map( fvr -> Objects.requireNonNull( tree.fetchCurRecord( fvr.getObjectId() ), "Failure fetching tree record" ) )
-                .sort( )
+                .sort()
                 .collect( () -> new TreeSet<TreeDto>(), TreeSet::add )
                 .block();
     }
@@ -138,7 +173,7 @@ public class TestFiles {
         return fileQueries.fetchRecordsByFileId( fileId, tree.getUserId() )
                 .publishOn( blockingSched )
                 .map( fvr -> Objects.requireNonNull( tree.fetchCurRecord( fvr.getObjectId() ), "Failure fetching tree record" ) )
-                .collect( () -> new TreeSet<TreeDto>( ), TreeSet::add )
+                .collect( () -> new TreeSet<TreeDto>(), TreeSet::add )
                 .block();
     }
 
@@ -152,7 +187,7 @@ public class TestFiles {
     public NavigableSet<FileDto> fetchFileDtosLinkedTo(TreeDto treeDto) {
         return fileQueries.fetchRecordsByObjectId( treeDto.getObjectId() )
                 .map( fileViewToFile::convert )
-                .collect( () -> new TreeSet<FileDto>( ), TreeSet::add )
+                .collect( () -> new TreeSet<FileDto>(), TreeSet::add )
                 .block();
     }
 
@@ -161,7 +196,7 @@ public class TestFiles {
         return fetchObjectsLinkedTo( fileViewDto.getFileId() );
     }
 
-    ObjectFileLink insertFileViewDto(String treePath, String checksum) {
+    ObjectFileLink insertFileView(String treePath, String checksum) {
         TreeDto treeDto = Objects.requireNonNull( tree.getOrigRecord( treePath ), "treePath not found" );
         UUID objectId = treeDto.getObjectId();
         UUID userId = treeDto.getUserId();
@@ -171,8 +206,8 @@ public class TestFiles {
         if (treeDtoByChecksum.containsKey( checksum )) {
             // if duplicate objectPath <-> checksum link, table constraints prevent insertion
             // (unique composite key constraint on tree_join_file)
-            UUID fileId = this.getOrigFileFor(checksum).getFileId();
-            createdRecord = fileQueries.createLink( toCreate.fileId(fileId).size(fileSize++).build() )
+            UUID fileId = this.getOrigFileFor( checksum ).getFileId();
+            createdRecord = fileQueries.createLink( toCreate.fileId( fileId ).size( fileSize++ ).build() )
                     .flatMap( rec -> fileQueries.fetchFileViewDto( rec.getObjectId(), rec.getFileId() ) )
                     .block();
         } else {
@@ -195,52 +230,16 @@ public class TestFiles {
         NavigableSet<FileViewDto> fileRecSet = fileViewDtoByObjectPath.computeIfAbsent(
                 treePath, k -> new TreeSet<FileViewDto>() );
         NavigableSet<TreeDto> treeRecSet = treeDtoByChecksum.computeIfAbsent(
-                checksum, k -> new TreeSet<TreeDto>( ) );
+                checksum, k -> new TreeSet<TreeDto>() );
         fileRecSet.add( fileViewDto );
         treeRecSet.add( treeDto );
-        FileDto fileDto = fileViewToFile.convert(fileViewDto);
-        if (!fileDto.equals(fileDtoByChecksum.computeIfAbsent(checksum,  k -> fileDto) ) ) {
-            throw new IllegalStateException("Multiple inserts for same file checksum produced different file records");
+        FileDto fileDto = fileViewToFile.convert( fileViewDto );
+        if (!fileDto.equals( fileDtoByChecksum.computeIfAbsent( checksum, k -> fileDto ) )) {
+            throw new IllegalStateException( "Multiple inserts for same file checksum produced different file records" );
         }
     }
 
     record ObjectFileLink(TreeDto treeDto, FileViewDto fileViewDto) {
     }
 
-    record CsvRecord(String treePath, String fileChecksum) {
-    }
-
-    static class TestFilesCsvParser {
-
-        private TestFilesCsvParser() throws IllegalAccessException {
-            throw new IllegalAccessException("Do not instantiate -- utility class");
-
-        }
-        static private final String COMMENT_REGEX = "^\s*#.*";
-        static private final String DELIM_REGEX = "\s*,\s*";
-
-        static Stream<CsvRecord> parse(@NonNull String csv) {
-            return csv.lines().map( TestFilesCsvParser::splitLine )
-                    .filter( split -> split.length == 2 )
-                    .map( TestFilesCsvParser::toCsvRecord );
-        }
-
-        // returns String[0] for comments else String[2]
-        private static String[] splitLine(String line) throws IllegalArgumentException {
-            if (line.matches( COMMENT_REGEX ) || line.isBlank()) {
-                // a comment;
-                return new String[0];
-            }
-            String[] split = line.strip()
-                    .split( DELIM_REGEX );
-            if (split.length != 2) {
-                throw new IllegalArgumentException( "Unable to parse line: " + line );
-            }
-            return split;
-        }
-
-        private static CsvRecord toCsvRecord(String[] split) {
-            return new CsvRecord( split[0], split[1] );
-        }
-    }
 }
