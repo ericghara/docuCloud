@@ -67,9 +67,9 @@ class TestFileAssertionIntTest {
 
     @BeforeEach
     void before() throws IOException, URISyntaxException {
-        Path input = Paths.get( this.getClass().getClassLoader()
+        Path schemaFile = Paths.get( this.getClass().getClassLoader()
                 .getResource( "tests-schema.sql" ).toURI() );
-        String sql = Files.readString( input );
+        String sql = Files.readString( schemaFile );
         Mono.from( dsl.query( sql ) ).block();
         tree0 = treeFactory.constructFromCsv( TREE_FACTORY_CSV, user0 );
         files0 = fileFactory.constructFromCsv( FILE_FACTORY_CSV, tree0 );

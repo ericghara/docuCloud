@@ -49,7 +49,7 @@ public class TestFileTree {
     public TreeDto getOrigRecord(Ltree path) throws IllegalArgumentException {
         TreeDto dto = dtoByPath.get( path );
         if (Objects.isNull( dto ) ) {
-            throw new IllegalArgumentException("Instance has not created an instance with specified path");
+            throw new IllegalArgumentException("Instance has not created an object with the specified path");
         }
         // copy doesn't copy objectId...
         return dto;

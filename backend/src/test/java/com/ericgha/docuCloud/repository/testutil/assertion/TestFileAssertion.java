@@ -17,7 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
 public class TestFileAssertion {
 
-    // Simply tests if fileObj with specified path and fileResource with specified checksum
+    // Simply tests if treeObjwith specified path and fileResource with specified checksum
     // are linked and have same user_id.  No comparisons are made to the tracked TestFiles
     // state (ie file_id, timestamps, size)
     // Any other adjacency found will cause the test to fail

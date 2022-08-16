@@ -76,9 +76,9 @@ class TestFilesIntTest {
 
     @PostConstruct
     void postConstruct() throws IOException, URISyntaxException {
-        Path input = Paths.get( this.getClass().getClassLoader()
+        Path schemaFile = Paths.get( this.getClass().getClassLoader()
                 .getResource( "tests-schema.sql" ).toURI() );
-        String sql = Files.readString( input );
+        String sql = Files.readString( schemaFile );
         Mono.from( dsl.query( sql ) ).block();
         this.tree0 = treeFactory.constructFromCsv( TREE_FACTORY_CSV, user0 );
         this.tree1 = treeFactory.constructFromCsv( TREE_FACTORY_CSV, user1 );
@@ -268,5 +268,20 @@ class TestFilesIntTest {
         var found = files0.fetchFileViewDtosGroupedByObjectPathStr(wanted);
         // comapre snapshot before additions to adjacency list without addition
         assertCollectionMapsEqual( expected, found );
+    }
+
+
+    @Test
+    @DisplayName("getOrigFileViewFor returns expected record")
+    void getOrigFileViewFor() {
+        String csv = """
+                fileObj0, fileRes0
+                fileObj1, fileRes0
+                dir0.fileObj2, fileRes0
+                """;
+        TestFiles files0 = fileFactory.constructFromCsv( csv, tree0 );
+        FileViewDto expected = files0.insertFileViewRecord( "dir0.fileObj3", "fileRes0" );
+        FileViewDto found = files0.getOrigFileViewFor( "dir0.fileObj3", "fileRes0" );
+        assertEquals(expected, found);
     }
 }

@@ -137,5 +137,4 @@ public class TestFilesTest {
         assertIterableEquals( List.of(obj0), testFiles.getOrigTreeObjectsFor( checksum ) );
         assertEquals( fileViewToFile.convert(fileView0), testFiles.getOrigFileFor( checksum ) );
     }
-
 }

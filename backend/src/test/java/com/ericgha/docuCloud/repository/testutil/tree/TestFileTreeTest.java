@@ -57,9 +57,9 @@ public class TestFileTreeTest {
     void before() throws URISyntaxException, IOException {
         // testcontainers cannot reliably run complex init scrips (ie with declared functions)
         // testcontainers/testcontainers-java issue #2814
-        Path input = Paths.get( this.getClass().getClassLoader()
+        Path schemaFile = Paths.get( this.getClass().getClassLoader()
                 .getResource( "tests-schema.sql" ).toURI() );
-        String sql = Files.readString( input );
+        String sql = Files.readString( schemaFile );
         Mono.from( dsl.query( sql ) ).block();
     }
 

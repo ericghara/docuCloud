@@ -7,13 +7,14 @@ services:
     image: postgres:14
     restart: always
     environment:
-      POSTGRES_USER: root
+      POSTGRES_USER: admin
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: docu-cloud-dev
+      POSTGRES_DB: postgres
     ports:
       - "5435:5432"
     volumes:
       - postgres-db-data:/var/lib/postgresql/data
+      - ./50000_record_db.sql:/docker-entrypoint-initdb.d/init-50000-record-db.sql:ro
 
 volumes:
   postgres-db-data:

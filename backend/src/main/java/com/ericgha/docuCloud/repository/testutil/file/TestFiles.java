@@ -86,6 +86,15 @@ public class TestFiles {
         return dto;
     }
 
+    // throws if treePathStr not found or no edge between treeObj and fileRes exists
+    public FileViewDto getOrigFileViewFor(String treePathStr, String fileResChecksum ) throws IllegalArgumentException {
+        return this.getOrigFileViewsFor( treePathStr )
+                .stream()
+                .filter(fileViewDto -> fileViewDto.getChecksum().equals( fileResChecksum ) )
+                .findFirst()
+                .orElseThrow( () -> new IllegalArgumentException("Unable to find edge between treeObj and fileRes") );
+    }
+
     public NavigableMap<String, NavigableSet<FileViewDto>> getOrigFileViewsGroupedByPathStr() {
         NavigableMap<String, NavigableSet<FileViewDto>> copy = new TreeMap<>();
         fileViewDtoByObjectPath.keySet().forEach( pathStr ->
@@ -125,7 +134,7 @@ public class TestFiles {
     public NavigableMap<String, NavigableSet<FileViewDto>> fetchFileViewDtosGroupedByObjectPathStr() {
         return this.groupByPathStr(
                 fileQueries.fetchRecordsByUserId( tree.getUserId() )
-                        .publishOn( blockingSched ) );
+                       .publishOn( blockingSched ) );
     }
 
     public NavigableMap<String, NavigableSet<FileViewDto>> fetchFileViewDtosGroupedByObjectPathStr(
@@ -207,7 +216,7 @@ public class TestFiles {
             // if duplicate objectPath <-> checksum link, table constraints prevent insertion
             // (unique composite key constraint on tree_join_file)
             UUID fileId = this.getOrigFileFor( checksum ).getFileId();
-            createdRecord = fileQueries.createLink( toCreate.fileId( fileId ).size( fileSize++ ).build() )
+            createdRecord = fileQueries.createLink( toCreate.fileId( fileId ).build() )
                     .flatMap( rec -> fileQueries.fetchFileViewDto( rec.getObjectId(), rec.getFileId() ) )
                     .block();
         } else {
