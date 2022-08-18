@@ -15,6 +15,14 @@ frontend/src/main/js/node_modules
 frontend/src/main/js/.pnp
 .pnp.js
 
+# dummy db records
+backend/misc/docker/50000_record_db.sql
+backend/src/test/java/com/ericgha/docuCloud/repository/testutil/InsertDummyRecords.java
+backend/src/test/resources/50000_edge_file_resources.csv
+backend/src/test/resources/50000_edge_tree_objects.csv
+test/resources/5000_edge_tree_objects.csv
+
+
 # testing
 frontend/src/main/js/coverage
 
