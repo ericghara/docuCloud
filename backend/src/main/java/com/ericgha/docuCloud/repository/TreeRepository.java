@@ -4,7 +4,6 @@ import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.Tree;
-import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 import lombok.RequiredArgsConstructor;
 import org.jooq.CommonTableExpression;
 import org.jooq.DSLContext;
@@ -81,7 +80,7 @@ public class TreeRepository {
     }
 
     @Transactional
-    public Flux<UUID> rmDirRecursive(TreeDto record, CloudUser cloudUser) {
+    public Flux<TreeDto> rmDirRecursive(TreeDto record, CloudUser cloudUser) {
         if (record.getObjectType() != ObjectType.DIR) {
             return Flux.empty();
         }
@@ -89,20 +88,20 @@ public class TreeRepository {
         SelectConditionStep<Record1<UUID>> delObjectIds = selectDescendents( record, cloudUser );
         return Flux.from( dsl.delete( TREE )
                         .where( TREE.OBJECT_ID.in( delObjectIds ) )
-                        .returning( TREE.OBJECT_ID ) )
-                .map( TreeRecord::getObjectId );
+                        .returning( asterisk() ) )
+                .map(TreeDto::fromRecord);
     }
 
     @Transactional
-    public Mono<UUID> rmNormal(TreeDto record, CloudUser cloudUser) {
+    public Mono<TreeDto> rmNormal(TreeDto record, CloudUser cloudUser) {
         // Doesn't perform internal check of proper objectType as a creating a subtree from a spoofed file is not expensive
         SelectJoinStep<Record1<Integer>> doDel = hasDescendents( record, cloudUser );
         return Mono.from(
                         dsl.delete( TREE )
                                 .where( TREE.OBJECT_ID.eq( record.getObjectId() )
                                         .and( val( 1 ).eq( doDel ) ) )
-                                .returning( TREE.OBJECT_ID ) )
-                .map( TreeRecord::getObjectId );
+                                .returning( asterisk() ) )
+                            .map(TreeDto::fromRecord);
     }
 
 

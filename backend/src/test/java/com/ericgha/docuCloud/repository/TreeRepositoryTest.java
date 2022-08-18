@@ -509,12 +509,11 @@ class TreeRepositoryTest {
 
         String toDelete = "dir0";
 
-        Flux<UUID> found = treeRepository.rmDirRecursive( tree0.getOrigRecord( toDelete ), user0 )
+        Flux<TreeDto> found = treeRepository.rmDirRecursive( tree0.getOrigRecord( toDelete ), user0 )
                 .sort();
-        Iterable<UUID> expected = Stream.of(
+        Iterable<TreeDto> expected = Stream.of(
                         "dir0", "dir0.dir1", "dir0.dir1.dir2", "dir0.dir3", "dir0.dir3.file1" )
                 .map( p -> tree0.getOrigRecord( p ) )
-                .map( TreeDto::getObjectId )
                 .sorted()
                 .toList();
         StepVerifier.create( found )
@@ -529,8 +528,7 @@ class TreeRepositoryTest {
         assertNoChanges( tree1 );
     }
 
-    @ParameterizedTest
-    @DisplayName("rmNormal deletes record and returns object_id")
+    @ParameterizedTest(name = "rmNormal deletes record and returns object_id - {index} : {0}")
     @ValueSource(strings = {"dir0.dir1.dir2", "file0"})
     void rmNormalDeletesRecordAndReturnsObjectId(String toDelete) {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
@@ -538,7 +536,7 @@ class TreeRepositoryTest {
         TreeDto recToDelete = tree0.getOrigRecord( toDelete );
 
         StepVerifier.create( treeRepository.rmNormal( recToDelete, user0 ) )
-                .expectNext( recToDelete.getObjectId() )
+                .expectNext( recToDelete )
                 .verifyComplete();
 
         List<TreeDto> found = tree0.fetchAllUserObjects( );
