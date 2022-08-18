@@ -27,12 +27,15 @@ public final class FileDto implements Serializable, Comparable<FileDto> {
     private final UUID fileId;
     private final String checksum;
     private final Long size;
+
+    private final UUID userId;
     private final OffsetDateTime uploadedAt;
 
     public FileRecord intoRecord() {
         return new FileRecord().setFileId( fileId )
                 .setChecksum( checksum )
                 .setSize( size )
+                .setUserId( userId )
                 .setUploadedAt( uploadedAt );
     }
 
@@ -44,6 +47,7 @@ public final class FileDto implements Serializable, Comparable<FileDto> {
             Comparator.comparing( FileDto::getFileId )
                     .thenComparing( FileDto::getChecksum )
                     .thenComparing( FileDto::getSize )
+                    .thenComparing( FileDto::getUserId )
                     .thenComparing( FileDto::getUploadedAt );
 
     public int compareTo(@NonNull FileDto other) {

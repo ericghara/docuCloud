@@ -17,4 +17,9 @@ public class FileViewDtoComparators {
 
     }
 
+    static public Comparator<FileViewDto> compareByLinkedAtUploadedAtFileId() {
+        return Comparator.comparing( FileViewDto::getLinkedAt )
+                .thenComparing( FileViewDto::getUploadedAt )
+                .thenComparing( FileViewDto::getFileId );
+    }
 }

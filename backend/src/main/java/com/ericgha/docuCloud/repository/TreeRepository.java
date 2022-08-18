@@ -35,8 +35,7 @@ public class TreeRepository {
 
     private final DSLContext dsl;
 
-    // todo add an interface in front of this that allows for an object mapper
-    // for testing the objectmapper will be NO-OP but for production will conver to Tree pojo
+    // TODO lsDir(Ltree path, CloudUser clouduser)
 
     @Transactional
     public Mono<TreeDto> create(TreeDto treeDto, CloudUser cloudUser) {
@@ -107,6 +106,7 @@ public class TreeRepository {
     }
 
 
+    // returning source_id, destination_id, object_type
     @Transactional
     public Flux<Record3<UUID, UUID, ObjectType>> cpDir(Ltree destination, TreeDto sourceRecord, CloudUser cloudUser) {
         if (sourceRecord.getObjectType() != ObjectType.DIR) {

@@ -14,6 +14,7 @@ public class FileViewDtoToFileDto implements Converter<FileViewDto, FileDto> {
         return FileDto.builder().fileId( source.getFileId() )
                 .checksum( source.getChecksum() )
                 .size( source.getSize() )
+                .userId( source.getUserId() )
                 .uploadedAt( source.getUploadedAt() )
                 .build();
     }

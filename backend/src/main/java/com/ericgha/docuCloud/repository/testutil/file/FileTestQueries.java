@@ -98,7 +98,8 @@ public class FileTestQueries {
     }
 
     public Mono<TreeJoinFileDto> createLink(FileViewDto rec) {
-        return Mono.from( dsl.insertInto( FILE_VIEW ).set( FILE_VIEW.OBJECT_ID, rec.getObjectId() )
+        return Mono.from( dsl.insertInto( FILE_VIEW )
+                        .set( FILE_VIEW.OBJECT_ID, rec.getObjectId() )
                         .set( FILE_VIEW.FILE_ID, rec.getFileId() )
                         // required due to table constraints
                         .set( FILE_VIEW.USER_ID, rec.getUserId() )
@@ -106,7 +107,7 @@ public class FileTestQueries {
                         .returning( asterisk() ) )
                 // Converts result to treeJoinFileRecord because many fields are null in fileViewRecord
                 .map(FileViewDto::fromRecord)
-                .map( fileViewToTreeJoinFile::convert );
+                .mapNotNull( fileViewToTreeJoinFile::convert );
     }
 
     public Mono<Long> deleteAllLinksTo(FileDto file) {

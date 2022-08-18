@@ -6,17 +6,15 @@ import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.FileDto;
 import com.ericgha.docuCloud.dto.FileViewDto;
 import com.ericgha.docuCloud.dto.TreeDto;
-import com.ericgha.docuCloud.dto.TreeJoinFileDto;
 import com.ericgha.docuCloud.repository.testutil.assertion.TestFileAssertion;
 import com.ericgha.docuCloud.repository.testutil.file.TestFiles;
 import com.ericgha.docuCloud.repository.testutil.file.TestFilesFactory;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
 import com.ericgha.docuCloud.repository.testutil.tree.TestFileTreeFactory;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
-import org.jooq.CommonTableExpression;
+import com.ericgha.docuCloud.util.comparators.FileViewDtoComparators;
 import org.jooq.DSLContext;
-import org.jooq.Record1;
-import org.jooq.impl.DSL;
+import org.jooq.exception.DataAccessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,11 +28,13 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import static com.ericgha.docuCloud.jooq.Tables.FILE_VIEW;
-import static org.jooq.impl.DSL.*;
+import static com.ericgha.docuCloud.repository.testutil.assertion.OffsetDateTimeAssertion.assertPastDateTimeWithinLast;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
@@ -62,7 +62,7 @@ class FileRepositoryIntTest {
             .realm( "cloud9" ).build();
 
     private final CloudUser user1 = CloudUser.builder()
-            .userId( UUID.fromString( "fffffff-ffff-ffff-fedc-ba9876543210" ) )
+            .userId( UUID.fromString( "ffffffff-ffff-ffff-fedc-ba9876543210" ) )
             .username( "unitTester" )
             .realm( "cloud9" ).build();
 
@@ -125,73 +125,54 @@ class FileRepositoryIntTest {
     }
 
     @Test
-    @DisplayName("deleteEdge step deletes expected record")
-    void deleteEdgeStepDeletesExpected() {
-        final String objPathStr = "dir0.fileObj1";
-        final String fileResChecksum = "fileRes0";
-        final String expectedState = """
+    @DisplayName("createFileFor creates the expected file_view record")
+    void createFileForCreatesExpectedRecord() {
+        String expectedState = """
                 fileObj0, fileRes0
-                # deleted: dir0.fileObj1, fileRes0
+                dir0.fileObj1, fileRes0
                 fileObj2, fileRes1
+                dir0.fileObj3, fileRes2
                 """;
-        FileViewDto fileViewToDelete = files0.getOrigFileViewFor( objPathStr, fileResChecksum );
-        TreeJoinFileDto edgeToDelete = fileViewToTreeJoinFile.convert( fileViewToDelete );
-        TreeJoinFileDto deletedFileView = Mono.from( fileRepository.deleteEdgeStep( edgeToDelete, user0 ) )
-                .map( TreeJoinFileDto::fromRecord )
-                .block();
-        assertEquals( edgeToDelete, deletedFileView );
-        TestFileAssertion.assertNoChangesFor( files0, expectedState );
+        TreeDto objToLink = tree0.getOrigRecord( "dir0.fileObj3" );
+        FileDto newFile = FileDto.builder().checksum( "fileRes2" ).size( 2L ).build();
+        StepVerifier.create( fileRepository.createFileFor( objToLink, newFile, user0 ) )
+                .assertNext( record -> {
+                    assertEquals( objToLink.getObjectId(), record.getObjectId() );
+                    assertNotNull( record.getFileId() );
+                    assertEquals( user0.getUserId(), record.getUserId() );
+                    assertPastDateTimeWithinLast( record.getLinkedAt(), Duration.ofSeconds( 1 ) );
+                    assertPastDateTimeWithinLast( record.getUploadedAt(), Duration.ofSeconds( 1 ) );
+                    assertEquals( newFile.getChecksum(), record.getChecksum() );
+                    assertEquals( newFile.getSize(), record.getSize() );
+                } )
+                .verifyComplete();
         TestFileAssertion.assertRepositoryState( files0, expectedState );
+        TestFileAssertion.assertNoChangesFor( files0, FILE_FACTORY_CSV );
         TestFileAssertion.assertNoChanges( files1 );
     }
 
     @Test
-    @DisplayName("selectFileNodeDegree returns node degrees for given file_ids")
-    void selectFileNodeDegreeReturnsNodeDegrees() {
-        UUID fileRes0Id = files0.getOrigFileFor( "fileRes0" ).getFileId();
-        UUID fileRes1Id = files0.getOrigFileFor( "fileRes1" ).getFileId();
-        Map<UUID, Long> expected = Map.of( fileRes0Id, 2L,
-                fileRes1Id, 1L );
-        // select fileIds
-        CommonTableExpression<Record1<UUID>> fileIds = name("rm_link").as(dsl.select( field( "file_id", UUID.class ) )
-                .from( DSL.values( row( fileRes0Id ), row( fileRes1Id ) )
-                        .as( "ids", "file_id" ) ) );
-        // get node degrees for selected fileIds
-        StepVerifier.create( fileRepository.selectFileNodeDegreeFrom( fileIds ) )
-                .thenConsumeWhile( record -> {
-                    var curId = record.get( FILE_VIEW.FILE_ID );
-                    var curDegree = record.get( "count", Long.class );
-                    assertTrue( expected.containsKey( curId ), "Incorrect fileId: + curId" );
-                    assertEquals( expected.get( curId ), curDegree, "Unexpected node degree" );
-                    return true;
+    @DisplayName("createFileFor returns error if cannot insert file")
+    void createFileForReturnsEmptyIfCannotCreate() {
+        TreeDto objToLink = tree1.getOrigRecord( "dir0.fileObj3" ); // notice tree1, not user's file
+        FileDto newFile = FileDto.builder().checksum( "fileRes2" ).size( 2L ).build();
+        StepVerifier.create( fileRepository.createFileFor( objToLink, newFile, user0 ) )
+                .verifyError( DataAccessException.class );
+        TestFileAssertion.assertNoChanges( files0 );
+        TestFileAssertion.assertNoChanges( files1 );
+    }
+
+    @Test
+    @DisplayName("rmEdge deletes an edge and the linked file when no links after delete returning file_id and true")
+    void rmEdgeDeletesEdgeAndFileAndReturnsTrueWhenCreatesOrphan() {
+        FileViewDto toDelete = ( files0.getOrigFileViewFor( "fileObj2", "fileRes1" ) );
+        FileDto expectedFile = fileViewToFile.convert( toDelete );
+        StepVerifier.create( fileRepository.rmEdge( fileViewToTreeJoinFile.convert( toDelete ), user0 ) )
+                .assertNext( rec2 -> {
+                    assertEquals( toDelete.getFileId(), rec2.get( "file_id" ) );
+                    assertEquals( true, rec2.get( "orphan" ) );
                 } )
                 .verifyComplete();
-    }
-
-    @Test
-    @DisplayName("selectFileNodeDegree returns count = null when fileId not found")
-    void selectFileNodeDegreeReturnsNullCountWhenFileIdNotFound() {
-        UUID wrongFileId = UUID.randomUUID();
-        // select fileIds
-        CommonTableExpression<Record1<UUID>> fileIds = name("rm_link").as(dsl.select( field( "file_id", UUID.class ) )
-                .from( DSL.values( row( wrongFileId ) )
-                        .as( "ids", "file_id" ) ) );
-        // get node degrees for selected fileIds
-        StepVerifier.create( fileRepository.selectFileNodeDegreeFrom( fileIds ) )
-                .assertNext( r -> {
-                    assertEquals(wrongFileId, r.get(field("file_id", UUID.class) ) );
-                    assertNull( r.get(field("count", Long.class) ) );
-                })
-                .verifyComplete();
-    }
-
-    @Test
-    @DisplayName( "rmEdge deletes an edge and returns file_id when link degree of file_id = 0 after delete" )
-    void rmEdgeReturnsFileIdWhenDegreeIsZero() {
-        FileViewDto toDelete = ( files0.getOrigFileViewFor( "fileObj2", "fileRes1" ) );
-        FileDto expectedFile = fileViewToFile.convert(toDelete);
-        FileDto foundFile = fileRepository.rmEdge( fileViewToTreeJoinFile.convert(toDelete), user0 ).block();
-//        assertEquals( expectedFile, foundFile );
         String expectedState = """
                 fileObj0, fileRes0
                 dir0.fileObj1, fileRes0
@@ -202,63 +183,176 @@ class FileRepositoryIntTest {
         TestFileAssertion.assertNoChanges( files1 );
     }
 
-
-//    @Test
-//    @DisplayName("linkExistingFile creates link between new obj and existing file")
-//        // This fails, and is atrocious so will be replaced
-//    void linkExistingFileCreatesLink() {
-//        TreeRecord curLinkedObj = tree0.getOrigRecord( "file0" );
-//        FileDto curFile = fileQueries.createFilesWithLinks( List.of( FileViewDtoCreator.create( curLinkedObj, user0, 0 ) ),
-//                FileViewDtoComparators.compareBySizeObjectId() ).map( fvrTofr::convert ).blockLast();
-//        TreeRecord newObj = tree0.getOrigRecord( "file1" );
-//        // make link to existing
-//        StepVerifier.create( fileService.linkExistingFile( curFile, newObj, user0 ) )
-//                .expectNext( 1L )
-//                .verifyComplete();
-//        // curFile should have link degree of 2
-//        StepVerifier.create( fileQueries.fetchFileLinkingDegreeByFileId( user0 ) )
-//                .assertNext( rec -> {
-//                    assertEquals( curFile.getFileId(), rec.get( FILE_VIEW.FILE_ID ) );
-//                    assertEquals( 2, rec.get( "count", Long.class ) );
-//                } )
-//                .verifyComplete();
-//
-//        List<Record2<UUID, Long>> objectLinkDegree = fileQueries.fetchObjectLinkingDegreeByObjectId( user0 )
-//                .filter( rec -> rec.get( "count", Long.class ) > 0 )
-//                .collectList()
-//                .block();
-//        List<UUID> expectedObjectIds = Stream.of( curLinkedObj, newObj )
-//                .sorted( TreeRecordComparators::compareByObjectId )
-//                .map( TreeRecord::getObjectId )
-//                .toList();
-//        // Link degree for cur and new obj should be 1
-//        assertEquals( 1L, objectLinkDegree.get( 0 ).get( "count", Long.class ) );
-//        assertEquals( 1L, objectLinkDegree.get( 1 ).get( "count", Long.class ) );
-//        // cur and new object should be the linked objects
-//        assertEquals( expectedObjectIds.get( 0 ), objectLinkDegree.get( 0 ).get( FILE_VIEW.OBJECT_ID ) );
-//        assertEquals( expectedObjectIds.get( 1 ), objectLinkDegree.get( 1 ).get( FILE_VIEW.OBJECT_ID ) );
-//        // no links for user1
-//        StepVerifier.create( fileQueries.fetchFileLinkingDegreeByFileId( user1 ) ).expectNextCount( 0 ).verifyComplete();
-//        StepVerifier.create( fileQueries.fetchObjectLinkingDegreeByObjectId( user1 ) ).expectNextCount( 0 ).verifyComplete();
-//    }
-
     @Test
-    void unLinkExistingFile() {
+    @DisplayName("rmEdge deletes deletes ONLY the edge when file does not become orphan, returning file_id and false")
+    void rmEdgeDeletesEdgeAndReturnsFalseWhenNotCreatesOrphan() {
+        FileViewDto toDelete = ( files0.getOrigFileViewFor( "fileObj0", "fileRes0" ) );
+        FileDto expectedFile = fileViewToFile.convert( toDelete );
+        StepVerifier.create( fileRepository.rmEdge( fileViewToTreeJoinFile.convert( toDelete ), user0 ) )
+                .assertNext( rec2 -> {
+                    assertEquals( toDelete.getFileId(), rec2.get( "file_id" ) );
+                    assertEquals( false, rec2.get( "orphan" ) );
+                } )
+                .verifyComplete();
+        String expectedState = """
+                # deleted: fileObj0, fileRes0
+                dir0.fileObj1, fileRes0
+                fileObj2, fileRes1
+                """;
+        TestFileAssertion.assertRepositoryState( files0, expectedState );
+        TestFileAssertion.assertNoChangesFor( files0, expectedState );
+        TestFileAssertion.assertNoChanges( files1 );
     }
 
     @Test
-    void unLink() {
+    @DisplayName("rmEdge returns empty if no file deleted")
+    void rmEdgeReturnsEmptyWhenNoFile() {
+        // notice files1, not user0's file
+        FileViewDto toDelete = ( files1.getOrigFileViewFor( "fileObj0", "fileRes0" ) );
+        StepVerifier.create( fileRepository.rmEdge( fileViewToTreeJoinFile.convert( toDelete ), user0 ) )
+                .expectNextCount( 0 )
+                .verifyComplete();
+        TestFileAssertion.assertNoChanges( files0 );
+        TestFileAssertion.assertNoChanges( files1 );
     }
 
     @Test
-    void selectFileLinkDegree() {
+    @DisplayName("rmEdges from deletes all edges from provided object and returns True for file_id deleted")
+    void rmEdgesDeletesEdgesLinkedToFileAndRemovesOrphanFiles() {
+        files0.insertFileViewRecord( "fileObj2", "fileRes0" );
+        /* Current state:
+            fileObj0, fileRes0
+            dir0.fileObj1, fileRes0
+            fileObj2, fileRes0
+            fileObj2, fileRes1
+         */
+        String expectedState = """
+                fileObj0, fileRes0
+                dir0.fileObj1, fileRes0
+                # deleted: fileObj2, fileRes0
+                # deleted: fileObj2, fileRes1
+                """;
+        UUID fileObj2Id = tree0.getOrigRecord( "fileObj2" ).getObjectId();
+        UUID fileRes0Id = files0.getOrigFileFor( "fileRes0" ).getFileId();
+        UUID fileRes1Id = files0.getOrigFileFor( "fileRes1" ).getFileId();
+        // expect fileRes1 to be deleted from files table, and only edge removed for fileRes1
+        Map<UUID, Boolean> expected = Map.of( fileRes0Id, false, fileRes1Id, true );
+        StepVerifier.create( fileRepository.rmEdgesFrom( fileObj2Id, user0 ) )
+                .thenConsumeWhile( rec2 -> {
+                    UUID curId = rec2.get( FILE_VIEW.FILE_ID );
+                    assertTrue( expected.containsKey( curId ), "unexpected file node" );
+                    assertEquals(expected.get(curId), rec2.get("orphan") );
+                    return true;
+                } )
+                .verifyComplete();
+        TestFileAssertion.assertRepositoryState( files0, expectedState );
+        TestFileAssertion.assertNoChangesFor( files0, expectedState );
+        TestFileAssertion.assertNoChanges( files1 );
     }
 
     @Test
-    void isUsersFile() {
+    @DisplayName( "cpNewestFile createsEdge between newest file linked to source and destination" )
+    void cpNewestFileCreatesExpectedEdge() {
+        // newest file
+        files0.insertFileViewRecord( "fileObj2", "fileRes0" );
+        /* Current state:
+            fileObj0, fileRes0
+            dir0.fileObj1, fileRes0
+            fileObj2, fileRes0
+            fileObj2, fileRes1
+         */
+        String expectedState = """
+                fileObj0, fileRes0
+                dir0.fileObj1, fileRes0
+                fileObj2, fileRes0
+                fileObj2, fileRes1
+                # new edge
+                dir0.fileObj3, fileRes0
+                """;
+        UUID sourceId = tree0.getOrigRecord("fileObj2").getObjectId();
+        UUID destId = tree0.getOrigRecord("dir0.fileObj3").getObjectId();
+        StepVerifier.create(fileRepository.cpNewestFile( sourceId, destId, user0 ) )
+                .expectNext( 1L )
+                .verifyComplete();
+        TestFileAssertion.assertRepositoryState( files0, expectedState );
+        TestFileAssertion.assertNoChangesFor( files0, FILE_FACTORY_CSV );
+        TestFileAssertion.assertNoChanges( files1 );
     }
 
     @Test
-    void selectLinksToFile() {
+    @DisplayName( "cpAllFiles creates edges connecting all source files to all dest files" )
+    void cpAllFilesCreatesExpectedEdges() {
+        files0.insertFileViewRecord( "fileObj0", "fileRes2" );
+        String expectedState = """
+                fileObj0, fileRes0
+                fileObj0, fileRes2
+                dir0.fileObj1, fileRes0
+                fileObj2, fileRes1
+                dir0.fileObj3, fileRes0
+                dir0.fileObj3, fileRes2
+                """;
+        UUID sourceId = tree0.getOrigRecord("fileObj0").getObjectId();
+        UUID destId = tree0.getOrigRecord("dir0.fileObj3").getObjectId();
+        StepVerifier.create( fileRepository.cpAllFiles( sourceId, destId, user0 ) )
+                .expectNext( 2L )
+                .verifyComplete();
+        TestFileAssertion.assertRepositoryState( files0, expectedState );
+        TestFileAssertion.assertNoChangesFor( files0, FILE_FACTORY_CSV );
+        TestFileAssertion.assertNoChanges( files1 );
+    }
+
+    @Test
+    @DisplayName( "lsNewestFilesFor returns newest file linked to fileObject when limit 1" )
+    void lsNewestFilesForReturnsNewestFileWhenLimit1() {
+        TreeDto source = tree0.getOrigRecord( "fileObj2" );
+        FileViewDto expected = files0.insertFileViewRecord( source.getPathStr(), "fileRes3" );
+        /*  current state:
+            fileObj0, fileRes0
+            dir0.fileObj1, fileRes0
+            fileObj2, fileRes1
+            fileObj2, fileRes3 <- newest
+         */
+        StepVerifier.create( fileRepository.lsNewestFilesFor( source, 1, user0 ) )
+                .expectNext( expected ).verifyComplete();
+    }
+
+    @Test
+    @DisplayName( "lsFiles for returns expected records descending linked_at, uploaded_at, uuid order" )
+    void lsFilesForReturnsExpectedFilesInExpectedOrder() {
+        String addAdjacencies = """
+                dir0.fileObj3, fileRes2
+                dir0.fileObj3, fileRes3
+                dir0.fileObj3, fileRes4
+                dir0.fileObj3, fileRes5
+                dir0.fileObj3, fileRes6
+                dir0.fileObj3, fileRes7
+                """;
+        files0.insertFileViewRecords( addAdjacencies );
+        var comp = FileViewDtoComparators.compareByLinkedAtUploadedAtFileId().reversed();
+        // these are now in the sort order used for pagnation
+        List<FileViewDto> allInOrder = files0.getOrigFileViewsFor( "dir0.fileObj3" )
+                .stream()
+                .sorted( comp )
+                .toList();
+        // go through allInOrder expecting next NUM_RECORDS AFTER that record
+        for (int i = 0; i < allInOrder.size() ; i++) {
+            int NUM_RECORDS = 4;
+            // add 1 to i because we expect records after current (we are seeking)
+            int expectedLast = Math.min( i + 1 + NUM_RECORDS, allInOrder.size() );
+            List<FileViewDto> expected = allInOrder.subList( i+1, expectedLast );
+            StepVerifier.create( fileRepository.lsFilesFor( allInOrder.get( i ), NUM_RECORDS, user0 ) )
+                    .expectNextSequence( expected )
+                    .verifyComplete();
+        }
+    }
+
+    @Test
+    @DisplayName( "countFilesFor returns number of fileResources linked to provided fileObject" )
+    void countFilesForCountsFileResLinkedToFileObj() {
+        TreeDto source = tree0.getOrigRecord( "fileObj0" );
+        int expectedCnt = files0.getOrigFileViewsFor( source.getPathStr() ).size();
+        StepVerifier.create( fileRepository.countFilesFor( source, user0  ) )
+                .expectNext( expectedCnt )
+                .verifyComplete();
     }
 }

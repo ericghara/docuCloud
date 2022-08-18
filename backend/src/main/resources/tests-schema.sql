@@ -78,6 +78,7 @@
 	file_id uuid PRIMARY KEY NOT NULL DEFAULT uuid_generate_v4(),
 	checksum varchar(64),
 	SIZE bigint,
+	user_id UUID NOT NULL DEFAULT uuid_generate_v4(),
 	uploaded_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -91,7 +92,7 @@
 ;CREATE OR REPLACE VIEW public.file_view AS
 	SELECT tree.object_id,
 		file.file_id,
-		tree.user_id,
+		file.user_id,
 		file.uploaded_at,
 		tree_join_file.linked_at,
 		file.checksum,
@@ -113,8 +114,8 @@ BEGIN
 	ELSEIF 0 = num_nulls(NEW.file_id, NEW.linked_at, NEW.uploaded_at, NEW.checksum, NEW.size) THEN
 			INSERT INTO public.tree_join_file (object_id, file_id, linked_at)
 				values(NEW.object_id, NEW.file_id, NEW.linked_at);
-			INSERT INTO public.file (file_id, checksum, SIZE, uploaded_at)
-				values(NEW.file_id, NEW.checksum, NEW.SIZE, NEW.uploaded_at);
+			INSERT INTO public.file (file_id, checksum, SIZE, user_id, uploaded_at)
+				values(NEW.file_id, NEW.checksum, NEW.SIZE, NEW.user_id, NEW.uploaded_at);
 	ELSE
 		RAISE EXCEPTION 'improper arguments: missing required fields or provided too many fields';
 	END IF;
@@ -124,6 +125,42 @@ $$ language plpgsql;
 
 CREATE OR REPLACE TRIGGER file_view_ins_trigger INSTEAD OF INSERT ON public.file_view
 	FOR EACH ROW EXECUTE PROCEDURE file_view_ins();
+
+-- Returns affected file UUIDs and if the file resource is an orphan
+CREATE OR REPLACE FUNCTION file_view_del(in_object_id UUID, in_file_id UUID, in_user_id UUID)
+RETURNS bool
+LANGUAGE plpgsql
+AS $$
+DECLARE
+	orphan bool := FALSE;
+BEGIN
+--	 fetch the input record to determine it is accurate & exists
+	CREATE TEMP TABLE IF NOT EXISTS del_links AS
+		(SELECT * FROM file_view
+		WHERE file_view.object_id = in_object_id
+			AND file_view.file_id = in_file_id
+				AND file_view.user_id = in_user_id);
+--	 force rollback on any improper or old record
+	IF NOT EXISTS(SELECT * FROM del_links)
+		THEN DROP TABLE del_links;
+			RAISE EXCEPTION 'record not found';
+	END IF;
+--	 delete edge
+	DELETE FROM public.tree_join_file
+	WHERE tree_join_file.file_id = in_file_id AND tree_join_file.object_id = in_object_id;
+--	 determine if need to delete file and populate return field
+	SELECT NOT EXISTS(
+		SELECT * FROM tree_join_file
+		WHERE tree_join_file.file_id = in_file_id)
+	INTO orphan;
+--	 delete file if required
+	IF orphan THEN
+		DELETE FROM public.file
+		WHERE file.file_id IN (SELECT del_links.file_id FROM del_links);
+	END IF;
+	DROP TABLE del_links;
+	RETURN orphan;
+END;$$
 
 
 
