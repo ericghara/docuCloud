@@ -1,3 +1,4 @@
+
 plugins {
     id 'org.springframework.boot' version '3.0.0-M4'
     id 'io.spring.dependency-management' version '1.0.12.RELEASE'
@@ -83,7 +84,7 @@ jooq {
             generateSchemaSourceOnCompilation = true  // default (can be omitted)
 
             generationTool {
-                logging = Logging.WARN
+                logging = "WARN"
                 jdbc {
                     driver = 'org.postgresql.Driver'
                     url = 'jdbc:postgresql://localhost:5435/docu-cloud-dev'
