@@ -14,6 +14,7 @@ import org.jooq.Record2;
 import org.jooq.ResultQuery;
 import org.jooq.SelectConditionStep;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -26,6 +27,7 @@ import static org.jooq.impl.DSL.*;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class FileRepository {
 
     private final DSLContext dsl;

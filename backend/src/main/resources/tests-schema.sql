@@ -90,7 +90,7 @@
 );
 
 ;CREATE OR REPLACE VIEW public.file_view AS
-	SELECT tree.object_id,
+	SELECT tree_join_file.object_id,
 		file.file_id,
 		file.user_id,
 		file.uploaded_at,
@@ -99,9 +99,7 @@
 		file.size
 	FROM public.file
 	LEFT JOIN public.tree_join_file
-	ON tree_join_file.file_id = file.file_id
-	LEFT JOIN public.tree
-	ON tree.object_id = tree_join_file.object_id;
+	ON tree_join_file.file_id = file.file_id;
 
 CREATE OR REPLACE FUNCTION file_view_ins() RETURNS TRIGGER AS $$
 BEGIN

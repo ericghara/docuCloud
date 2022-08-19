@@ -62,7 +62,7 @@ public class TreeTestQueries {
     public TreeDto getByObjectId(UUID objectId) {
         return Mono.from( dsl.selectFrom( TREE )
             .where( TREE.OBJECT_ID.eq( objectId ) ) )
-            .map(treeRecord -> treeRecord.into( TreeDto.class) )
+            .mapNotNull(treeRecord -> treeRecord.into( TreeDto.class) )
            .block();
     }
 

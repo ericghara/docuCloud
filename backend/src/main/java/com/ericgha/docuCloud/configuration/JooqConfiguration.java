@@ -21,7 +21,7 @@ public class JooqConfiguration {
     private final ConnectionFactory cfi;
 
     @Bean
-    public DefaultConfigurationCustomizer configurationCustomiser() {
+    public DefaultConfigurationCustomizer configurationCustomizer() {
         return c -> c.settings()
                 .withRenderQuotedNames( RenderQuotedNames.EXPLICIT_DEFAULT_UNQUOTED );
     }

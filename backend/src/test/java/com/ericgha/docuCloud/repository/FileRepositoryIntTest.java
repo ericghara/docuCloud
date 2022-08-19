@@ -14,12 +14,14 @@ import com.ericgha.docuCloud.repository.testutil.tree.TestFileTreeFactory;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
 import com.ericgha.docuCloud.util.comparators.FileViewDtoComparators;
 import org.jooq.DSLContext;
+import org.jooq.Record2;
 import org.jooq.exception.DataAccessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -33,7 +35,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.ericgha.docuCloud.jooq.Routines.fileViewDel;
 import static com.ericgha.docuCloud.jooq.Tables.FILE_VIEW;
+import static com.ericgha.docuCloud.jooq.Tables.TREE;
 import static com.ericgha.docuCloud.repository.testutil.assertion.OffsetDateTimeAssertion.assertPastDateTimeWithinLast;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -218,7 +222,7 @@ class FileRepositoryIntTest {
 
     @Test
     @DisplayName("rmEdges from deletes all edges from provided object and returns True for file_id deleted")
-    void rmEdgesDeletesEdgesLinkedToFileAndRemovesOrphanFiles() {
+    void rmEdgesFromDeletesEdgesLinkedToFileAndRemovesOrphanFiles() {
         files0.insertFileViewRecord( "fileObj2", "fileRes0" );
         /* Current state:
             fileObj0, fileRes0
@@ -354,5 +358,50 @@ class FileRepositoryIntTest {
         StepVerifier.create( fileRepository.countFilesFor( source, user0  ) )
                 .expectNext( expectedCnt )
                 .verifyComplete();
+    }
+
+
+    @Test
+    @DisplayName( "deleteMe" )
+    void deletMe(@Autowired TreeRepository treeRepository) {
+        files0.insertFileViewRecord( "fileObj2", "fileRes0" );
+        /* Current state:
+            fileObj0, fileRes0
+            dir0.fileObj1, fileRes0
+            fileObj2, fileRes0
+            fileObj2, fileRes1
+         */
+        String expectedState = """
+                fileObj0, fileRes0
+                dir0.fileObj1, fileRes0
+                # deleted: fileObj2, fileRes0
+                # deleted: fileObj2, fileRes1
+                """;
+        TreeDto fileObj2 = tree0.getOrigRecord( "fileObj2" );
+        UUID fileRes0Id = files0.getOrigFileFor( "fileRes0" ).getFileId();
+        UUID fileRes1Id = files0.getOrigFileFor( "fileRes1" ).getFileId();
+//        Flux<Record2<UUID,Boolean>> deleted = treeRepository.rmNormal( fileObj2, user0 ).flatMapMany( treeDto ->  fileRepository.rmEdgesFrom( treeDto.getObjectId(), user0 ) );
+        Map<UUID, Boolean> expected = Map.of( fileRes0Id, false, fileRes1Id, true );
+        Flux<Record2<UUID, Boolean>> flux = Flux.from(dsl.transactionPublisher( trx -> {
+                    var trxDsl = trx.dsl();
+                    return Mono.from( trxDsl.deleteFrom( TREE )
+                                    .where( TREE.OBJECT_ID.eq(fileObj2.getObjectId() ) ) )
+                            .map( (Number n) -> (long) n)
+                            .flatMapMany( p -> Flux.from(trxDsl.select(FILE_VIEW.FILE_ID, fileViewDel(FILE_VIEW.OBJECT_ID, FILE_VIEW.FILE_ID, FILE_VIEW.USER_ID).as("orphan"))
+                                    .from(FILE_VIEW)
+                                    .where(FILE_VIEW.OBJECT_ID.eq(fileObj2.getObjectId() ) ) ) );
+        } ) );
+        StepVerifier.create( flux )
+                .thenConsumeWhile( rec2 -> {
+                    UUID curId = rec2.get( FILE_VIEW.FILE_ID );
+                    assertTrue( expected.containsKey( curId ), "unexpected file node" );
+                    assertEquals(expected.get(curId), rec2.get("orphan") );
+                    return true;
+                } )
+                .verifyComplete();
+        assertNull( tree0.fetchCurRecord( fileObj2 ) );
+        TestFileAssertion.assertRepositoryState( files0, expectedState );
+        TestFileAssertion.assertNoChangesFor( files0, expectedState );
+        TestFileAssertion.assertNoChanges( files1 );
     }
 }
