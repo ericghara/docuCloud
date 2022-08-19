@@ -102,10 +102,19 @@
 	ON tree_join_file.file_id = file.file_id;
 
 CREATE OR REPLACE FUNCTION file_view_ins() RETURNS TRIGGER AS $$
+DECLARE
+	fileObj tree;
 BEGIN
-	IF 0 < num_nulls(NEW.object_id, NEW.user_id) OR
-		(SELECT tree.user_id FROM tree WHERE NEW.object_id = tree.object_id AND NEW.user_id = tree.user_id) IS NULL THEN
-		RAISE EXCEPTION 'User does not have access to file, or file object does not exist';
+	IF 0 <> num_nulls(NEW.object_id, NEW.user_id) THEN
+		RAISE EXCEPTION 'user_id and object_id must be specified';
+	END IF;
+	SELECT * FROM tree INTO fileObj WHERE NEW.object_id = tree.object_id;
+	IF fileObj IS NULL
+		THEN RAISE EXCEPTION 'Record with provided object_id not found in tree';
+	ELSEIF fileObj.user_id <> NEW.user_id
+		THEN RAISE EXCEPTION 'The provided user_id does not match the record user_id';
+	ELSEIF fileObj.object_type <> 'FILE'
+		THEN RAISE EXCEPTION 'The object specified is not a file';
 	ELSEIF 0 = num_nulls(NEW.file_id, NEW.linked_at) AND 0 = num_nonnulls(NEW.uploaded_at, NEW.checksum, NEW.size) THEN
 		INSERT INTO public.tree_join_file (object_id, file_id, linked_at)
 			values(NEW.object_id, NEW.file_id, NEW.linked_at);
