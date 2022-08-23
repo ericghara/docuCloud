@@ -16,6 +16,7 @@ import org.jooq.SelectConditionStep;
 import org.jooq.SelectJoinStep;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.reactivestreams.Publisher;
+import org.springframework.stereotype.Repository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -28,7 +29,7 @@ import static com.ericgha.docuCloud.jooq.Routines.*;
 import static com.ericgha.docuCloud.jooq.Tables.TREE;
 import static org.jooq.impl.DSL.*;
 
-@Service
+@Repository
 @RequiredArgsConstructor
 public class TreeRepository {
 

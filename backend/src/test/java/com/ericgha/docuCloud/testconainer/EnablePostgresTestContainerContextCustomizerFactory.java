@@ -54,7 +54,8 @@ public class EnablePostgresTestContainerContextCustomizerFactory implements Cont
                     .withPassword( "password" );
             postgresContainer.start();
             var properties = Map.<String, Object>of(
-                    "spring.r2dbc.url", postgresContainer.getJdbcUrl().replace( "jdbc:", "r2dbc:" ),
+                    "spring.r2dbc.host", postgresContainer.getHost(),
+                    "spring.r2dbc.port", postgresContainer.getMappedPort( PostgreSQLContainer.POSTGRESQL_PORT ),
                     "spring.r2dbc.password", postgresContainer.getPassword(),
                     "spring.r2dbc.username", postgresContainer.getUsername(),
                     // Prevent any in memory db from replacing the data source

@@ -1,2 +1,3 @@
 org.springframework.test.context.ContextCustomizerFactory=\
-  com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory
+  com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory,\
+  com.ericgha.docuCloud.testconainer.EnableMinioTestContainerContextCustomizerFactory

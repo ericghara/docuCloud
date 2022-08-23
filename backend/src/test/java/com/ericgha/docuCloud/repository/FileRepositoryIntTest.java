@@ -358,10 +358,9 @@ class FileRepositoryIntTest {
                 .verifyComplete();
     }
 
-
     @Test
     @DisplayName( "deleteMe" )
-    void deletMe(@Autowired TreeRepository treeRepository) {
+    void deleteMe(@Autowired TreeRepository treeRepository) {
         files0.insertFileViewRecord( "fileObj2", "fileRes0" );
         /* Current state:
             fileObj0, fileRes0
@@ -396,4 +395,5 @@ class FileRepositoryIntTest {
         TestFileAssertion.assertNoChangesFor( files0, expectedState );
         TestFileAssertion.assertNoChanges( files1 );
     }
+
 }

@@ -11,6 +11,7 @@ import org.jooq.DSLContext;
 import org.jooq.Record1;
 import org.jooq.Record2;
 import org.jooq.ResultQuery;
+import org.springframework.stereotype.Repository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
@@ -23,7 +24,7 @@ import static com.ericgha.docuCloud.jooq.Tables.FILE_VIEW;
 import static com.ericgha.docuCloud.jooq.Tables.TREE_JOIN_FILE;
 import static org.jooq.impl.DSL.*;
 
-@Service
+@Repository
 @RequiredArgsConstructor
 @Transactional
 public class FileRepository {

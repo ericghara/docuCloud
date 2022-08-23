@@ -1,8 +1,9 @@
 spring:
   r2dbc:
     name: docu-cloud-dev
-    url: r2dbc:postgresql://localhost:5435
-    username: root
+    host: http://127.0.0.1
+    port: 5435
+    username: admin
     password: password
 
 logging:
@@ -15,3 +16,9 @@ logging:
 app:
   security:
     allowed-origins: https://auth.ericgha.com, http://localhost:8080/, http://localhost:3000/
+  s3:
+    access-key-id: minioadmin
+    secret-access-key: minioadmin
+    region: us-east-1
+    s3-endpoint-override: http://localhost:9000 # fallback for unrecognized region
+    s3-bucket: docu-cloud-test
