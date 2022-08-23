@@ -1,14 +1,11 @@
 package com.ericgha.docuCloud.repository;
 
-import com.ericgha.docuCloud.configuration.AppConfig;
-import com.ericgha.docuCloud.configuration.JooqConfiguration;
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
-import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
-import com.ericgha.docuCloud.repository.testutil.tree.TestFileTreeFactory;
-import com.ericgha.docuCloud.repository.testutil.tree.TreeTestQueries;
+import com.ericgha.docuCloud.repository.testtool.tree.TestFileTree;
+import com.ericgha.docuCloud.repository.testtool.tree.TestFileTreeFactory;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
 import com.ericgha.docuCloud.util.comparators.TreeDtoComparators;
 import org.jooq.DSLContext;
@@ -22,11 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
-import org.springframework.boot.test.autoconfigure.data.r2dbc.AutoConfigureDataR2dbc;
-import org.springframework.boot.test.autoconfigure.data.r2dbc.DataR2dbcTest;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -47,8 +40,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.ericgha.docuCloud.jooq.Tables.TREE;
-import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertion.assertNoChanges;
-import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertion.assertNoChangesFor;
+import static com.ericgha.docuCloud.repository.testtool.assertion.TestFileTreeAssertion.assertNoChanges;
+import static com.ericgha.docuCloud.repository.testtool.assertion.TestFileTreeAssertion.assertNoChangesFor;
 import static org.jooq.impl.DSL.currentOffsetDateTime;
 import static org.junit.jupiter.api.Assertions.*;
 

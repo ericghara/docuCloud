@@ -17,7 +17,6 @@ import org.jooq.SelectJoinStep;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.reactivestreams.Publisher;
 import org.springframework.stereotype.Repository;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;

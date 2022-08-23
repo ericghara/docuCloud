@@ -1,11 +1,11 @@
-package com.ericgha.docuCloud.repository.testutil.file;
+package com.ericgha.docuCloud.repository.testtool.file;
 
 import com.ericgha.docuCloud.dto.FileDto;
 import com.ericgha.docuCloud.dto.FileViewDto;
 import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.jooq.tables.records.FileRecord;
-import com.ericgha.docuCloud.repository.testutil.file.ObjectResourceAdjacencyParser.ObjectResourceAdjacency;
-import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
+import com.ericgha.docuCloud.repository.testtool.file.ObjectResourceAdjacencyParser.ObjectResourceAdjacency;
+import com.ericgha.docuCloud.repository.testtool.tree.TestFileTree;
 import org.springframework.core.convert.converter.Converter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.GroupedFlux;

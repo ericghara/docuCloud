@@ -1,16 +1,14 @@
-package com.ericgha.docuCloud.repository.testutil.tree;
+package com.ericgha.docuCloud.repository.testtool.tree;
 
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.UUID;
 
 @RequiredArgsConstructor
 @Component
-@Profile("test")
 public class TestFileTreeFactory {
 
     static String defaultTree = """

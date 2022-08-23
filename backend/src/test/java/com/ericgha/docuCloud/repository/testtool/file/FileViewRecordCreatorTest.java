@@ -1,4 +1,4 @@
-package com.ericgha.docuCloud.repository.testutil.file;
+package com.ericgha.docuCloud.repository.testtool.file;
 
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.FileViewDto;

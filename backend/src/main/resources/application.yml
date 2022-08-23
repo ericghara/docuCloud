@@ -1,3 +1,7 @@
+# Available profiles Major: prod, dev
+# subProfiles: test: test should be run with dev profile
+#              s3: enables S3FileStore during test
+
 management:
   endpoints:
     web:

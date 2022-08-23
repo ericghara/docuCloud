@@ -1,4 +1,4 @@
-package com.ericgha.docuCloud.repository.testutil.tree;
+package com.ericgha.docuCloud.repository.testtool.tree;
 
 import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
@@ -6,7 +6,6 @@ import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
 import org.jooq.postgres.extensions.types.Ltree;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -21,7 +20,6 @@ import static org.jooq.impl.DSL.defaultValue;
 
 @RequiredArgsConstructor
 @Component
-@Profile("test")
 public class TreeTestQueries {
 
     private final DSLContext dsl;

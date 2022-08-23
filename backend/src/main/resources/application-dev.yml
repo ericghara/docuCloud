@@ -1,8 +1,7 @@
 spring:
   r2dbc:
     name: docu-cloud-dev
-    host: http://127.0.0.1
-    port: 5435
+    url: r2dbc:postgresql://localhost:5435
     username: admin
     password: password
 

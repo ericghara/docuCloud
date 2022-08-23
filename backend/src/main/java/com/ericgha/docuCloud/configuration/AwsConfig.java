@@ -6,7 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -21,9 +20,9 @@ import software.amazon.awssdk.services.s3.model.Bucket;
 import java.net.URI;
 import java.security.Security;
 import java.time.Duration;
-import java.util.Objects;
 
 @Slf4j
+@Configuration
 public class AwsConfig {
 
     @Autowired

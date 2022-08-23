@@ -1,9 +1,9 @@
-package com.ericgha.docuCloud.repository.testutil.assertion;
+package com.ericgha.docuCloud.repository.testtool.assertion;
 
 import com.ericgha.docuCloud.dto.FileViewDto;
-import com.ericgha.docuCloud.repository.testutil.file.ObjectResourceAdjacencyParser;
-import com.ericgha.docuCloud.repository.testutil.file.ObjectResourceAdjacencyParser.ObjectResourceAdjacency;
-import com.ericgha.docuCloud.repository.testutil.file.TestFiles;
+import com.ericgha.docuCloud.repository.testtool.file.ObjectResourceAdjacencyParser;
+import com.ericgha.docuCloud.repository.testtool.file.ObjectResourceAdjacencyParser.ObjectResourceAdjacency;
+import com.ericgha.docuCloud.repository.testtool.file.TestFiles;
 
 import java.util.NavigableMap;
 import java.util.NavigableSet;
@@ -12,7 +12,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static com.ericgha.docuCloud.repository.testutil.assertion.CollectionAssertion.*;
+import static com.ericgha.docuCloud.repository.testtool.assertion.CollectionAssertion.*;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
 public class TestFileAssertion {

@@ -1,10 +1,11 @@
-package com.ericgha.docuCloud.repository.testutil.tree;
+package com.ericgha.docuCloud.repository.testtool.tree;
 
 import com.ericgha.docuCloud.converter.CsvLtreeFormatter;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import lombok.NonNull;
 import org.jooq.postgres.extensions.types.Ltree;
 
+import java.util.Locale;
 import java.util.stream.Stream;
 
 class TestFileTreeCsvParser {
@@ -39,7 +40,7 @@ class TestFileTreeCsvParser {
     private CsvRecord toCsvRecord(String[] split) {
         ObjectType objectType = ObjectType.valueOf( split[0].toUpperCase() );
         try {
-            return new CsvRecord( objectType, ltreeFormatter.parse( split[1], null ) );
+            return new CsvRecord( objectType, ltreeFormatter.parse( split[1], Locale.US ) );
         } catch (Exception e) {
             throw new IllegalArgumentException( e );
         }

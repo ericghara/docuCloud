@@ -1,4 +1,4 @@
-package com.ericgha.docuCloud.repository.testutil.tree;
+package com.ericgha.docuCloud.repository.testtool.tree;
 
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.TreeDto;

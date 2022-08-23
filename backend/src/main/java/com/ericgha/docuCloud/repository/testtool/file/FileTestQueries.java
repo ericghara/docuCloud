@@ -1,4 +1,4 @@
-package com.ericgha.docuCloud.repository.testutil.file;
+package com.ericgha.docuCloud.repository.testtool.file;
 
 import com.ericgha.docuCloud.converter.FileViewDtoToTreeJoinFileDto;
 import com.ericgha.docuCloud.dto.CloudUser;
@@ -8,7 +8,6 @@ import com.ericgha.docuCloud.dto.TreeJoinFileDto;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 import org.jooq.Record2;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -28,7 +27,6 @@ import static org.jooq.impl.DSL.*;
  * safeguards to enforce table constraints.
  */
 @RequiredArgsConstructor
-@Profile("test")
 @Component
 public class FileTestQueries {
 

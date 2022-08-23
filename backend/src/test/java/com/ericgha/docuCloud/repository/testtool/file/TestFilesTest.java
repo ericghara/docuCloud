@@ -1,4 +1,4 @@
-package com.ericgha.docuCloud.repository.testutil.file;
+package com.ericgha.docuCloud.repository.testtool.file;
 
 import com.ericgha.docuCloud.converter.FileViewDtoToFileDto;
 import com.ericgha.docuCloud.converter.FileViewDtoToTreeJoinFileDto;
@@ -8,7 +8,7 @@ import com.ericgha.docuCloud.dto.FileViewDto;
 import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.dto.TreeJoinFileDto;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
-import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
+import com.ericgha.docuCloud.repository.testtool.tree.TestFileTree;
 import com.ericgha.docuCloud.util.comparators.FileViewDtoComparators;
 import com.ericgha.docuCloud.util.comparators.TreeDtoComparators;
 import org.jooq.postgres.extensions.types.Ltree;

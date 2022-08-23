@@ -1,18 +1,18 @@
 package com.ericgha.docuCloud.service;
 
+import com.ericgha.docuCloud.configuration.AppConfig;
+import com.ericgha.docuCloud.configuration.AwsConfig;
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.FileDto;
-import com.ericgha.docuCloud.testconainer.EnableMinioTestContainerContextCustomizerFactory;
-import com.ericgha.docuCloud.testconainer.MinioContainer;
+import com.ericgha.docuCloud.testconainer.EnableMinioTestContainerContextCustomizerFactory.EnableMinioTestContainer;
 import lombok.extern.slf4j.Slf4j;
-import org.junit.Rule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -23,7 +23,6 @@ import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
@@ -31,9 +30,12 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 
-@SpringBootTest
+@SpringBootTest(classes = {S3FileStore.class, S3AsyncClient.class, AwsConfig.class, AppConfig.class})
 @Slf4j
-@EnableMinioTestContainerContextCustomizerFactory.EnableMinioTestContainer
+@EnableMinioTestContainer
+@ActiveProfiles(value = {"test","s3","dev"})
+@TestPropertySource(properties=
+        {"spring.autoconfigure.exclude=org.springframework.boot.test.autoconfigure.data.r2dbc.DataR2dbcTestContextBootstrapper.class})"})
 public class S3FileStoreIntTest {
 
     @Autowired
@@ -75,7 +77,7 @@ public class S3FileStoreIntTest {
 
     @DisplayName( "Bucket Exists returns true if bucket exists" )
     @Test
-    void bucketExists() throws InterruptedException {
+    void bucketExists() {
         // fix this test it currently only works in local environment
         Mono<Boolean> exists = s3FileStore.bucketExists();
         StepVerifier.create( exists )
@@ -156,17 +158,4 @@ public class S3FileStoreIntTest {
         StepVerifier.create( putMono.then(delMono)
                 .thenMany( existsMono ) ).expectError( NoSuchKeyException.class ).verify();
     }
-
-//    @Test
-//    @DisplayName( "putBucket policy" )
-//    void putBucketPolicy() {
-//        String policy = """
-//                removalPolicy: cdk.RemovalPolicy.DESTROY,
-//                autoDeleteObjects: true
-//                """;
-//        StepVerifier.create( s3FileStore.putBocketPolicy( policy ) )
-//                .expectNextCount( 0 )
-//                .verifyComplete();
-//    }
-
 }

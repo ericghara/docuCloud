@@ -1,4 +1,4 @@
-package com.ericgha.docuCloud.repository.testutil.tree;
+package com.ericgha.docuCloud.repository.testtool.tree;
 
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;

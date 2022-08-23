@@ -1,7 +1,7 @@
-package com.ericgha.docuCloud.repository.testutil.assertion;
+package com.ericgha.docuCloud.repository.testtool.assertion;
 
 import com.ericgha.docuCloud.dto.TreeDto;
-import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
+import com.ericgha.docuCloud.repository.testtool.tree.TestFileTree;
 import org.jooq.postgres.extensions.types.Ltree;
 
 import java.util.List;

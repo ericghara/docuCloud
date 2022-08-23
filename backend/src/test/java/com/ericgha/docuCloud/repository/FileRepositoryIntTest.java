@@ -6,11 +6,11 @@ import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.FileDto;
 import com.ericgha.docuCloud.dto.FileViewDto;
 import com.ericgha.docuCloud.dto.TreeDto;
-import com.ericgha.docuCloud.repository.testutil.assertion.TestFileAssertion;
-import com.ericgha.docuCloud.repository.testutil.file.TestFiles;
-import com.ericgha.docuCloud.repository.testutil.file.TestFilesFactory;
-import com.ericgha.docuCloud.repository.testutil.tree.TestFileTree;
-import com.ericgha.docuCloud.repository.testutil.tree.TestFileTreeFactory;
+import com.ericgha.docuCloud.repository.testtool.assertion.TestFileAssertion;
+import com.ericgha.docuCloud.repository.testtool.file.TestFiles;
+import com.ericgha.docuCloud.repository.testtool.file.TestFilesFactory;
+import com.ericgha.docuCloud.repository.testtool.tree.TestFileTree;
+import com.ericgha.docuCloud.repository.testtool.tree.TestFileTreeFactory;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
 import com.ericgha.docuCloud.util.comparators.FileViewDtoComparators;
 import org.jooq.DSLContext;
@@ -36,7 +36,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static com.ericgha.docuCloud.jooq.Tables.FILE_VIEW;
-import static com.ericgha.docuCloud.repository.testutil.assertion.OffsetDateTimeAssertion.assertPastDateTimeWithinLast;
+import static com.ericgha.docuCloud.repository.testtool.assertion.OffsetDateTimeAssertion.assertPastDateTimeWithinLast;
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest

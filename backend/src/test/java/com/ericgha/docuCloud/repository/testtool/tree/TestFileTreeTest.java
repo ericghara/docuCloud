@@ -1,4 +1,4 @@
-package com.ericgha.docuCloud.repository.testutil.tree;
+package com.ericgha.docuCloud.repository.testtool.tree;
 
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.TreeDto;
@@ -25,8 +25,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertion.assertNoChanges;
-import static com.ericgha.docuCloud.repository.testutil.assertion.TestFileTreeAssertion.assertNoChangesFor;
+import static com.ericgha.docuCloud.repository.testtool.assertion.TestFileTreeAssertion.assertNoChanges;
+import static com.ericgha.docuCloud.repository.testtool.assertion.TestFileTreeAssertion.assertNoChangesFor;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
