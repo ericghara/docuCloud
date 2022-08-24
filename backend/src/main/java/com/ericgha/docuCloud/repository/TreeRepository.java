@@ -4,6 +4,7 @@ import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.Tree;
+import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 import lombok.RequiredArgsConstructor;
 import org.jooq.CommonTableExpression;
 import org.jooq.DSLContext;
@@ -17,11 +18,11 @@ import org.jooq.SelectJoinStep;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.reactivestreams.Publisher;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.OffsetDateTime;
+import java.util.Objects;
 import java.util.UUID;
 
 import static com.ericgha.docuCloud.jooq.Routines.*;
@@ -34,7 +35,7 @@ public class TreeRepository {
 
     // TODO lsDir(Ltree path, CloudUser clouduser)
 
-    @Transactional
+
     public Mono<TreeDto> create(TreeDto treeDto, CloudUser cloudUser, DSLContext dsl) {
         return Mono.from( dsl.insertInto( TREE )
                         .set( TREE.OBJECT_ID, UUID.randomUUID() )
@@ -46,7 +47,7 @@ public class TreeRepository {
                 .map( treeRecord -> treeRecord.into( TreeDto.class ) );
     }
 
-    @Transactional
+
     public Mono<Long> mvFile(Ltree newPath, TreeDto treeDto, CloudUser cloudUser, DSLContext dsl) {
         if (treeDto.getObjectType() != ObjectType.FILE) {
             return Mono.empty();
@@ -61,7 +62,7 @@ public class TreeRepository {
                 .map( (Number o) -> o.longValue() );
     }
 
-    @Transactional
+
     public Mono<Long> mvDir(Ltree newPath, TreeDto curRecord, CloudUser cloudUser, DSLContext dsl) {
         if (curRecord.getObjectType() != ObjectType.DIR) {
             return Mono.empty();
@@ -77,7 +78,7 @@ public class TreeRepository {
                 .map( (Number o) -> o.longValue() );
     }
 
-    @Transactional
+
     public Flux<TreeDto> rmDirRecursive(TreeDto record, CloudUser cloudUser, DSLContext dsl) {
         if (record.getObjectType() != ObjectType.DIR) {
             return Flux.empty();
@@ -90,7 +91,7 @@ public class TreeRepository {
                 .map( TreeDto::fromRecord );
     }
 
-    @Transactional
+
     public Mono<TreeDto> rmNormal(TreeDto record, CloudUser cloudUser, DSLContext dsl) {
         // Doesn't perform internal check of proper objectType as a creating a subtree from a spoofed file is not expensive
         SelectJoinStep<Record1<Integer>> doDel = hasDescendents( record, cloudUser, dsl );
@@ -102,9 +103,7 @@ public class TreeRepository {
                 .map( TreeDto::fromRecord );
     }
 
-
     // returning source_id, destination_id, object_type
-    @Transactional
     public Flux<Record3<UUID, UUID, ObjectType>> cpDir(Ltree destination, TreeDto sourceRecord, CloudUser cloudUser, DSLContext dsl) {
         if (sourceRecord.getObjectType() != ObjectType.DIR) {
             return Flux.empty();
@@ -113,7 +112,7 @@ public class TreeRepository {
         return Flux.from( cpCommon( selectRecordCopies, dsl ) );
     }
 
-    @Transactional
+
     // Returning ObjectType is a compromise for code usability with cpDir, it will of course always be ObjectType.FILE
     public Mono<Record3<UUID, UUID, ObjectType>> cpFile(Ltree destination, TreeDto sourceRecord, CloudUser cloudUser, DSLContext dsl) {
         if (sourceRecord.getObjectType() != ObjectType.FILE) {
@@ -121,6 +120,41 @@ public class TreeRepository {
         }
         var selectRecordCopies = fetchFileCopyRecords( destination, sourceRecord, cloudUser, dsl );
         return Mono.from( cpCommon( selectRecordCopies, dsl ) );
+    }
+
+    // Query designed such that one or both of Object_id and path are used
+    // If a ObjectType = FILE will always return empty
+    public Flux<TreeDto> ls(TreeDto source, CloudUser cloudUser, DSLContext dsl) {
+        CommonTableExpression<TreeRecord> parent = name( "parent" ).as(
+                this.flexibleSelect( source, cloudUser, dsl ) );
+        return Flux.from( dsl.with( parent )
+                .select(asterisk() )
+                .from(TREE, parent)
+                .where( ltreeIsparent( parent.field( TREE.PATH ), TREE.PATH ) )
+                .and( nlevel( parent.field( TREE.PATH ) ).plus( 1 ).eq( nlevel( TREE.PATH ) ) )
+                .and( TREE.USER_ID.eq(cloudUser.getUserId() ) )
+                .coerce( TREE ) )
+                .map( TreeDto::fromRecord );
+    }
+
+    // Query designed such that one or both of Object_id and path are used, therefore one of these fields may be null
+    ResultQuery<TreeRecord> flexibleSelect(TreeDto treeDto, CloudUser cloudUser, DSLContext dsl) {
+        UUID objectId = treeDto.getObjectId();
+        Ltree path = treeDto.getPath();
+        if (Objects.isNull( objectId ) && Objects.isNull( path )) {
+            throw new IllegalArgumentException( "One or both of objectId and path must be non-null.  Instead both were null" );
+        }
+        var conditions = TREE.USER_ID.eq( Objects.requireNonNull( cloudUser.getUserId(), "userId was null" ) )
+                .and( TREE.OBJECT_TYPE.ne( ObjectType.FILE ) );
+        if (Objects.nonNull( objectId )) {
+            conditions = conditions.and( val( objectId ).eq( TREE.OBJECT_ID ) );
+        }
+        if (Objects.nonNull( path )) {
+            conditions = conditions.and( val( path ).eq( TREE.PATH ) );
+        }
+        return dsl.select( asterisk() )
+                .from( TREE ).where( conditions ).limit( 1 )
+                .coerce( TREE );
     }
 
     // the purpose of this query is to check that the source is owned by the user

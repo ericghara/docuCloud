@@ -34,6 +34,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -579,5 +580,49 @@ class TreeRepositoryIntTest {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         tree0.getTrackedObjects().forEach( rec ->
                 assertFalse( isObject.apply( rec.getObjectType(), rec ) ) );
+    }
+
+    @Test
+    @DisplayName("ls returns expected files and dirs - objectId query")
+    void lsReturnsExpectedRecordsObjectIdQuery() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        // selectivity challenge
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        // testing objectId containing queries only
+        TreeDto parent = TreeDto.fromRecord(
+                tree0.getOrigRecord( "" ).intoRecord().setPath( null ) );
+        Iterable<TreeDto> expectedRecords = Stream.of( "dir0", "file0" )
+                .map( tree0::getOrigRecord ).collect(Collectors.toCollection(TreeSet::new) );
+        StepVerifier.create( treeRepository.ls( parent, user0, dsl ).sort() )
+                .expectNextSequence( expectedRecords ).verifyComplete();
+    }
+
+    @Test
+    @DisplayName("ls returns expected files and dirs - path query")
+    void lsReturnsExpectedRecordsPathQuery() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        // selectivity challenge
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        // testing path containing queries only
+        TreeDto parent = TreeDto.fromRecord(
+                tree0.getOrigRecord( "" ).intoRecord().setObjectId( null ) );
+        Iterable<TreeDto> expectedRecords = Stream.of( "dir0", "file0" )
+                .map( tree0::getOrigRecord ).collect(Collectors.toCollection(TreeSet::new) );
+        StepVerifier.create( treeRepository.ls( parent, user0, dsl ).sort() )
+                .expectNextSequence( expectedRecords ).verifyComplete();
+    }
+
+    @Test
+    @DisplayName("ls returns expected files and dirs - path and objectId query")
+    void lsReturnsExpectedRecordsPathAndObjectIdQuery() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        // selectivity challenge
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        // testing path & objectId containing queries
+        TreeDto parent = tree0.getOrigRecord( "" );
+        Iterable<TreeDto> expectedRecords = Stream.of( "dir0", "file0" )
+                .map( tree0::getOrigRecord ).collect(Collectors.toCollection(TreeSet::new) );
+        StepVerifier.create( treeRepository.ls( parent, user0, dsl ).sort() )
+                .expectNextSequence( expectedRecords ).verifyComplete();
     }
 }
