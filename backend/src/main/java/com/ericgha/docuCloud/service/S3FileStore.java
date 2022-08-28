@@ -34,7 +34,7 @@ import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
-import java.util.List;
+import java.util.UUID;
 
 import static reactor.core.publisher.Mono.fromFuture;
 
@@ -123,13 +123,8 @@ public class S3FileStore implements FileStore {
     }
 
     @Override
-    public Mono<Void> deleteFile(FileDto fileDto, CloudUser cloudUser) throws RuntimeException {
-        return deleteFiles( Flux.fromIterable( List.of(fileDto) ), cloudUser );
-    }
-
-    @Override
-    public Mono<Void> deleteFiles(Flux<FileDto> fileDtos, CloudUser cloudUser) throws RuntimeException {
-        Flux<ObjectIdentifier> objectIdentifiers = fileDtos.map(fileDto -> ObjectIdentifierGenerator.generate(fileDto, cloudUser) );
+    public Mono<Void> deleteFiles(Flux<UUID> fileIds, CloudUser cloudUser) throws RuntimeException {
+        Flux<ObjectIdentifier> objectIdentifiers = fileIds.map(fileId -> ObjectIdentifierGenerator.generate(fileId, cloudUser) );
         return deleteObjects( objectIdentifiers );
     }
 

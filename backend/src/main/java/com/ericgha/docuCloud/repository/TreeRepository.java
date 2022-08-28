@@ -36,6 +36,7 @@ public class TreeRepository {
     // TODO lsDir(Ltree path, CloudUser clouduser)
 
 
+    // required treeDto fields: objectType, path
     public Mono<TreeDto> create(TreeDto treeDto, CloudUser cloudUser, DSLContext dsl) {
         return Mono.from( dsl.insertInto( TREE )
                         .set( TREE.OBJECT_ID, UUID.randomUUID() )
@@ -48,13 +49,13 @@ public class TreeRepository {
     }
 
 
-    public Mono<Long> mvFile(Ltree newPath, TreeDto treeDto, CloudUser cloudUser, DSLContext dsl) {
-        if (treeDto.getObjectType() != ObjectType.FILE) {
+    public Mono<Long> mvFile(TreeDto source, Ltree destination, CloudUser cloudUser, DSLContext dsl) {
+        if (source.getObjectType() != ObjectType.FILE) {
             return Mono.empty();
         }
         return Mono.from( dsl.update( TREE )
-                        .set( TREE.PATH, newPath )
-                        .where( TREE.OBJECT_ID.eq( treeDto.getObjectId() )
+                        .set( TREE.PATH, destination )
+                        .where( TREE.OBJECT_ID.eq( source.getObjectId() )
                                 .and( TREE.USER_ID.eq( cloudUser.getUserId() ) )
                                 .and( TREE.OBJECT_TYPE.eq( ObjectType.FILE ) ) )
                 )
@@ -63,12 +64,12 @@ public class TreeRepository {
     }
 
 
-    public Mono<Long> mvDir(Ltree newPath, TreeDto curRecord, CloudUser cloudUser, DSLContext dsl) {
-        if (curRecord.getObjectType() != ObjectType.DIR) {
+    public Mono<Long> mvDir(TreeDto source, Ltree destination, CloudUser cloudUser, DSLContext dsl) {
+        if (source.getObjectType() != ObjectType.DIR) {
             return Mono.empty();
         }
         var movePathCte = name( "new" ).fields( "object_id", "path" )
-                .as( createMovePath( newPath, curRecord, cloudUser, dsl ) );
+                .as( createMovePath( destination, source, cloudUser, dsl ) );
         return Mono.from( dsl.with( movePathCte )
                         .update( TREE )
                         .set( TREE.PATH, movePathCte.field( "path", Ltree.class ) )
@@ -104,7 +105,7 @@ public class TreeRepository {
     }
 
     // returning source_id, destination_id, object_type
-    public Flux<Record3<UUID, UUID, ObjectType>> cpDir(Ltree destination, TreeDto sourceRecord, CloudUser cloudUser, DSLContext dsl) {
+    public Flux<Record3<UUID, UUID, ObjectType>> cpDir(TreeDto sourceRecord, Ltree destination, CloudUser cloudUser, DSLContext dsl) {
         if (sourceRecord.getObjectType() != ObjectType.DIR) {
             return Flux.empty();
         }
@@ -114,7 +115,7 @@ public class TreeRepository {
 
 
     // Returning ObjectType is a compromise for code usability with cpDir, it will of course always be ObjectType.FILE
-    public Mono<Record3<UUID, UUID, ObjectType>> cpFile(Ltree destination, TreeDto sourceRecord, CloudUser cloudUser, DSLContext dsl) {
+    public Mono<Record3<UUID, UUID, ObjectType>> cpFile(TreeDto sourceRecord, Ltree destination, CloudUser cloudUser, DSLContext dsl) {
         if (sourceRecord.getObjectType() != ObjectType.FILE) {
             return Mono.empty();
         }
@@ -122,18 +123,35 @@ public class TreeRepository {
         return Mono.from( cpCommon( selectRecordCopies, dsl ) );
     }
 
-    // Query designed such that one or both of Object_id and path are used
-    // If a ObjectType = FILE will always return empty
+    /**
+     * This works a little differently than a traditional UNIX ls.  The direct
+     * descendents of the source are returned along WITH the source.  This allows
+     * differentiation between <ol><li>The parent has no children</li>
+     * <li>The parent does not exist.</li></ol>  (1) will return only the source
+     * and (2) will return a null set.
+     * <br><br>
+     * This query is designed to be flexible, and allows TreeDtos that define
+     * one or both of, {@code objectId}, {@code path}.  If both are specified
+     * a match based on both is used.
+     *
+     * @param source
+     * @param cloudUser
+     * @param dsl
+     * @return records (if any) ordered by path ascending.  Source, if found,
+     * is guaranteed to be the first record returned.  If source is NOT found
+     * will always return null set.
+     */
     public Flux<TreeDto> ls(TreeDto source, CloudUser cloudUser, DSLContext dsl) {
         CommonTableExpression<TreeRecord> parent = name( "parent" ).as(
                 this.flexibleSelect( source, cloudUser, dsl ) );
         return Flux.from( dsl.with( parent )
-                .select(asterisk() )
-                .from(TREE, parent)
-                .where( ltreeIsparent( parent.field( TREE.PATH ), TREE.PATH ) )
-                .and( nlevel( parent.field( TREE.PATH ) ).plus( 1 ).eq( nlevel( TREE.PATH ) ) )
-                .and( TREE.USER_ID.eq(cloudUser.getUserId() ) )
-                .coerce( TREE ) )
+                        .select( TREE.asterisk() )
+                        .from( TREE, parent )
+                        .where( ltreeIsparent( parent.field( TREE.PATH ), TREE.PATH ) )
+                        .and( nlevel( TREE.PATH ).le(nlevel( parent.field( TREE.PATH ) ).plus( 1 ) ) )
+                        .and( TREE.USER_ID.eq( cloudUser.getUserId() ) )
+                        .orderBy( TREE.PATH.asc() )
+                        .coerce( TREE ) )
                 .map( TreeDto::fromRecord );
     }
 

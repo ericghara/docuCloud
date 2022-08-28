@@ -57,6 +57,7 @@ public class FileRepository {
                 .mapNotNull( FileViewDto::fromRecord );
     }
 
+    // This is intended for when a file version is being deleted
     // returns file edge pointed to and if the file was deleted (creating an orphan fileResource)
     // throws if record not found or not user's
     public Mono<Record2<UUID, Boolean>> rmEdge(TreeJoinFileDto link, CloudUser cloudUser, DSLContext dsl) {
@@ -68,6 +69,7 @@ public class FileRepository {
                         .and( FILE_VIEW.USER_ID.eq( cloudUser.getUserId() ) ) ) );
     }
 
+    // This is intended for when an object is deleted from treeRepository
     // returns file edge pointed to and if the file was deleted (creating an orphan fileResource)
     public Flux<Record2<UUID, Boolean>> rmEdgesFrom(UUID objectId, CloudUser cloudUser, DSLContext dsl) {
         return Flux.from( dsl.select( FILE_VIEW.FILE_ID,
@@ -95,12 +97,17 @@ public class FileRepository {
                 .map( (Number c) -> (long) c );
     }
 
-    public Mono<Integer> countFilesFor(TreeDto treeDto, CloudUser cloudUser, DSLContext dsl) {
-        return Mono.from( dsl.select( count( asterisk() ) )
+    public Mono<Long> countFilesFor(TreeDto treeDto, CloudUser cloudUser, DSLContext dsl) {
+        return Mono.from( dsl.select( count( asterisk() ).cast(Long.class) )
                         .from( FILE_VIEW )
                         .where( FILE_VIEW.OBJECT_ID.eq( treeDto.getObjectId() )
                                 .and( FILE_VIEW.USER_ID.eq( cloudUser.getUserId() ) ) ) )
                 .map( Record1::value1 );
+    }
+
+    public Mono<FileViewDto> lsNewestFileFor(TreeDto treeDto, CloudUser cloudUser, DSLContext dsl) {
+        return lsNewestFilesFor( treeDto, 1, cloudUser, dsl )
+                .next();
     }
 
     public Flux<FileViewDto> lsNewestFilesFor(TreeDto treeDto, int limit, CloudUser cloudUser, DSLContext dsl) {
@@ -108,7 +115,7 @@ public class FileRepository {
                 .mapNotNull( FileViewDto::fromRecord );
     }
 
-    public Flux<FileViewDto> lsFilesFor(FileViewDto lastRecord, int limit, CloudUser cloudUser, DSLContext dsl) {
+    public Flux<FileViewDto> lsNextFilesFor(FileViewDto lastRecord, int limit, CloudUser cloudUser, DSLContext dsl) {
         return Flux.from( dsl.select( asterisk() )
                         .from( FILE_VIEW )
                         .where( FILE_VIEW.OBJECT_ID.eq( lastRecord.getObjectId() ).and( FILE_VIEW.USER_ID.eq( cloudUser.getUserId() ) ) )

@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -34,8 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 @Slf4j
 @EnableMinioTestContainer
 @ActiveProfiles(value = {"test","s3","dev"})
-@TestPropertySource(properties=
-        {"spring.autoconfigure.exclude=org.springframework.boot.test.autoconfigure.data.r2dbc.DataR2dbcTestContextBootstrapper.class})"})
 public class S3FileStoreIntTest {
 
     @Autowired
@@ -59,9 +56,9 @@ public class S3FileStoreIntTest {
 
     @BeforeEach
     void before() {
-        s3FileStore.listBuckets().flatMap( s3FileStore::deleteAllObjectsInBucket )
+        s3FileStore.listBuckets()
+                .flatMap( s3FileStore::deleteAllObjectsInBucket )
                 .flatMap( s3FileStore::deleteBucket )
-                .doOnComplete( () -> log.info("complete") )
                 // it seems that create bucket was being evaluated eagerly and sometimes would
                 // fire before deleteBucket when using a simple then
                 .then(  Mono.defer(() -> s3FileStore.createBucketIfNotExists() ) ).block();
@@ -140,7 +137,7 @@ public class S3FileStoreIntTest {
     }
 
     @Test
-    @DisplayName( "deleteFile deletes expected file" )
+    @DisplayName( "deleteFiles deletes expected file" )
     void deleteFile() throws NoSuchAlgorithmException {
         byte[] data = new byte[256];
         byte[] digest = MessageDigest.getInstance( "SHA-1" ).digest(data);
@@ -153,7 +150,8 @@ public class S3FileStoreIntTest {
                 .size( (long) data.length )
                 .build();
         var putMono = s3FileStore.putFile( dataFlux, fileDto, user0 );
-        var delMono = Mono.defer( () -> s3FileStore.deleteFile( fileDto, user0 ) );
+        var delMono = Mono.defer(
+                () -> s3FileStore.deleteFiles( Mono.just(fileDto.getFileId() ).flux(), user0 ) );
         var existsMono = Flux.defer( () -> s3FileStore.getFile( fileDto, user0 ) );
         StepVerifier.create( putMono.then(delMono)
                 .thenMany( existsMono ) ).expectError( NoSuchKeyException.class ).verify();

@@ -11,7 +11,7 @@ import com.ericgha.docuCloud.repository.testtool.file.TestFiles;
 import com.ericgha.docuCloud.repository.testtool.file.TestFilesFactory;
 import com.ericgha.docuCloud.repository.testtool.tree.TestFileTree;
 import com.ericgha.docuCloud.repository.testtool.tree.TestFileTreeFactory;
-import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
+import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnablePostgresTestContainer;
 import com.ericgha.docuCloud.util.comparators.FileViewDtoComparators;
 import org.jooq.DSLContext;
 import org.jooq.Record2;
@@ -40,7 +40,7 @@ import static com.ericgha.docuCloud.repository.testtool.assertion.OffsetDateTime
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
-@EnabledPostgresTestContainer
+@EnablePostgresTestContainer
 class FileRepositoryIntTest {
     @Autowired
     private DSLContext dsl;
@@ -342,7 +342,7 @@ class FileRepositoryIntTest {
             // add 1 to i because we expect records after current (we are seeking)
             int expectedLast = Math.min( i + 1 + NUM_RECORDS, allInOrder.size() );
             List<FileViewDto> expected = allInOrder.subList( i+1, expectedLast );
-            StepVerifier.create( fileRepository.lsFilesFor( allInOrder.get( i ), NUM_RECORDS, user0, dsl) )
+            StepVerifier.create( fileRepository.lsNextFilesFor( allInOrder.get( i ), NUM_RECORDS, user0, dsl) )
                     .expectNextSequence( expected )
                     .verifyComplete();
         }
@@ -352,7 +352,7 @@ class FileRepositoryIntTest {
     @DisplayName( "countFilesFor returns number of fileResources linked to provided fileObject" )
     void countFilesForCountsFileResLinkedToFileObj() {
         TreeDto source = tree0.getOrigRecord( "fileObj0" );
-        int expectedCnt = files0.getOrigFileViewsFor( source.getPathStr() ).size();
+        long expectedCnt = files0.getOrigFileViewsFor( source.getPathStr() ).size();
         StepVerifier.create( fileRepository.countFilesFor( source, user0, dsl) )
                 .expectNext( expectedCnt )
                 .verifyComplete();

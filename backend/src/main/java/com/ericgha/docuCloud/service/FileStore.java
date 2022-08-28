@@ -4,12 +4,9 @@ import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.FileDto;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import software.amazon.awssdk.services.s3.model.Bucket;
 
 import java.nio.ByteBuffer;
-import java.security.MessageDigest;
 import java.util.UUID;
-import java.util.zip.Checksum;
 
 /**
  * Interface for persisting file data.
@@ -30,8 +27,6 @@ public interface FileStore {
 
     Flux<ByteBuffer> getFile(FileDto fileDto, CloudUser cloudUser);
 
-    Mono<Void> deleteFile(FileDto fileDto, CloudUser cloudUser) throws RuntimeException;
-
-    Mono<Void> deleteFiles(Flux<FileDto> fileDtos, CloudUser cloudUser) throws RuntimeException;
+    Mono<Void> deleteFiles(Flux<UUID> fileIds, CloudUser cloudUser) throws RuntimeException;
 
 }

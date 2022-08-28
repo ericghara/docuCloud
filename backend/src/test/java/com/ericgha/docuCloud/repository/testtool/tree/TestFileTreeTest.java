@@ -4,7 +4,7 @@ import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
-import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
+import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnablePostgresTestContainer;
 import org.jooq.DSLContext;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,7 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 
 @SpringBootTest
-@EnabledPostgresTestContainer
+@EnablePostgresTestContainer
 public class TestFileTreeTest {
 
     @Autowired

@@ -8,7 +8,7 @@ import com.ericgha.docuCloud.repository.testtool.file.TestFiles;
 import com.ericgha.docuCloud.repository.testtool.file.TestFilesFactory;
 import com.ericgha.docuCloud.repository.testtool.tree.TestFileTree;
 import com.ericgha.docuCloud.repository.testtool.tree.TestFileTreeFactory;
-import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
+import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnablePostgresTestContainer;
 import org.jooq.DSLContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @SpringBootTest
-@EnabledPostgresTestContainer
+@EnablePostgresTestContainer
 class TestFileAssertionIntTest {
 
 

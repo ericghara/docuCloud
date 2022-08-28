@@ -20,20 +20,22 @@ import java.lang.annotation.Target;
 import java.util.List;
 import java.util.Map;
 
-
+/**
+ * For this to work remember to add it to spring.factories
+ */
 public class EnablePostgresTestContainerContextCustomizerFactory implements ContextCustomizerFactory {
 
     @Target(ElementType.TYPE)
     @Retention(RetentionPolicy.RUNTIME)
     @Documented
     @Inherited
-    public @interface EnabledPostgresTestContainer {
+    public @interface EnablePostgresTestContainer {
     }
 
     @Override
     public ContextCustomizer createContextCustomizer(Class<?> testClass,
                                                      List<ContextConfigurationAttributes> configAttributes) {
-        if (!( AnnotatedElementUtils.hasAnnotation( testClass, EnabledPostgresTestContainer.class ) )) {
+        if (!( AnnotatedElementUtils.hasAnnotation( testClass, EnablePostgresTestContainer.class ) )) {
             return null;
         }
         return new PostgresTestContainerContextCustomizer();

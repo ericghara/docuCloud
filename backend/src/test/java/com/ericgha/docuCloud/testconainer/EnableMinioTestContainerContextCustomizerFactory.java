@@ -20,6 +20,9 @@ import java.lang.annotation.Target;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * For this to work remember to add it to spring.factories
+ */
 @Slf4j
 public class EnableMinioTestContainerContextCustomizerFactory implements ContextCustomizerFactory {
 

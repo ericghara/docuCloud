@@ -7,7 +7,7 @@ import com.ericgha.docuCloud.dto.TreeJoinFileDto;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.repository.testtool.tree.TestFileTree;
 import com.ericgha.docuCloud.repository.testtool.tree.TestFileTreeFactory;
-import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnabledPostgresTestContainer;
+import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnablePostgresTestContainer;
 import jakarta.annotation.PostConstruct;
 import org.jooq.DSLContext;
 import org.jooq.Record2;
@@ -38,7 +38,7 @@ import static com.ericgha.docuCloud.repository.testtool.assertion.OffsetDateTime
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
-@EnabledPostgresTestContainer
+@EnablePostgresTestContainer
 class FileTestQueriesTest {
     private static final String TREE_FACTORY_CSV = """
             ROOT, ""
