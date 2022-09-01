@@ -15,6 +15,14 @@ import java.util.Objects;
 import java.util.SplittableRandom;
 import java.util.random.RandomGenerator;
 
+/**
+ * Randomly generates file data, and a minimal FileDto object populated with a Base64 encoded
+ * checksum for the file as well as the file size.  {@code minSizeB} and {@code maxSizeB}
+ * specify that size range for the files generated (set to minSizeB = n and maxSizeB = n + 1 for a fixed
+ * file size).  During construction {@code algorithm}, {@code} bufferSizeB and {@code bufferSizeB}
+ * can be set.  Use the NoArgs constructor to build with sensible defaults, or the builder to
+ * specify some or all parameters.
+ */
 @Builder
 public class RandomFileGenerator {
 
@@ -40,7 +48,7 @@ public class RandomFileGenerator {
     /**
      * @param minSizeB  inclusive
      * @param maxSizeB  exclusive
-     * @param algorithm
+     * @param algorithm hash algorithm for checksum
      */
     private RandomFileGenerator(@Nullable Integer minSizeB, @Nullable Integer maxSizeB,
                                @Nullable String algorithm, @Nullable RandomGenerator random,
@@ -92,30 +100,15 @@ public class RandomFileGenerator {
         final int blocks = lastBlockY > 0 ? fullBlock + 1 : fullBlock;
         byte[][] matrix = new byte[blocks][];
         for (int i = 0; i < fullBlock; i++) {
-            matrix[i] = this.generateColumn( DEFAULT_BUFFER_SIZE_B );
+            matrix[i] = new byte[DEFAULT_BUFFER_SIZE_B];
+            random.nextBytes( matrix[i] );
         }
         if (lastBlockY > 0) {
-            matrix[blocks - 1] = this.generateColumn(lastBlockY);
+            int last = matrix.length-1;
+            matrix[last] = new byte[lastBlockY];
+            random.nextBytes( matrix[last] );
         }
         return matrix;
-    }
-
-    private byte[] generateColumn(int len) {
-        final long MASK = 0x00000000000000FFL;
-        final int BYTES_PER_LONG = 8;
-        long byteSource = 0;
-        int bytesWritten = BYTES_PER_LONG;
-        byte[] column = new byte[len];
-        for (int i = 0; i < len; i++) {
-            if (bytesWritten >= 8) {
-                byteSource = random.nextLong();
-                bytesWritten = 0;
-            }
-            column[i] = (byte) ( byteSource & MASK );
-            byteSource >>>= 8;
-            bytesWritten++;
-        }
-        return column;
     }
 
     private String hash(byte[][] matrix) {

@@ -8,8 +8,10 @@ spring:
 logging:
   level:
     org:
-#      springframework: DEBUG
-        r2dbc: DEBUG
+      springframework: DEBUG
+#        r2dbc: TRACE
+#        transaction:
+#          interceptor: TRACE
 #        security: DEBUG
 
 app:

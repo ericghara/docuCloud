@@ -7,6 +7,7 @@ import com.ericgha.docuCloud.dto.FileDto;
 import com.ericgha.docuCloud.dto.FileViewDto;
 import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.repository.testtool.assertion.TestFileAssertion;
+import com.ericgha.docuCloud.repository.testtool.file.RandomFileGenerator;
 import com.ericgha.docuCloud.repository.testtool.file.TestFiles;
 import com.ericgha.docuCloud.repository.testtool.file.TestFilesFactory;
 import com.ericgha.docuCloud.repository.testtool.tree.TestFileTree;
@@ -16,11 +17,14 @@ import com.ericgha.docuCloud.util.comparators.FileViewDtoComparators;
 import org.jooq.DSLContext;
 import org.jooq.Record2;
 import org.jooq.exception.DataAccessException;
+import org.jooq.postgres.extensions.types.Ltree;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.r2dbc.connection.R2dbcTransactionManager;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -36,6 +40,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static com.ericgha.docuCloud.jooq.Tables.FILE_VIEW;
+import static com.ericgha.docuCloud.jooq.enums.ObjectType.FILE;
 import static com.ericgha.docuCloud.repository.testtool.assertion.OffsetDateTimeAssertion.assertPastDateTimeWithinLast;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -58,6 +63,7 @@ class FileRepositoryIntTest {
     private TestFileTreeFactory treeFactory;
     @Autowired
     private TestFilesFactory fileFactory;
+
     private final CloudUser user0 = CloudUser.builder()
             .userId( UUID.fromString( "1234567-89ab-cdef-fedc-ba9876543210" ) )
             .username( "unitTester" )
@@ -360,6 +366,7 @@ class FileRepositoryIntTest {
 
     @Test
     @DisplayName( "deleteMe" )
+    // todo delete me
     void deleteMe(@Autowired TreeRepository treeRepository) {
         files0.insertFileViewRecord( "fileObj2", "fileRes0" );
         /* Current state:
@@ -394,6 +401,30 @@ class FileRepositoryIntTest {
         TestFileAssertion.assertRepositoryState( files0, expectedState );
         TestFileAssertion.assertNoChangesFor( files0, expectedState );
         TestFileAssertion.assertNoChanges( files1 );
+    }
+
+    @Test
+    @DisplayName( "deleteMe 2" )
+    // todo delete me
+    public void deleteMe2(@Autowired TreeRepository treeRepository, @Autowired R2dbcTransactionManager transactionManager,
+                          @Autowired TransactionalOperator transactionalOperator) {
+        RandomFileGenerator randomFileGenerator = new RandomFileGenerator();
+        // also remember to delete cfi autowire
+        // randomFileGenerator
+        TreeDto fileObj0 = TreeDto.builder().path( Ltree.valueOf("file100") )
+                .objectType( FILE )
+                .build();
+        FileDto file = randomFileGenerator.generate().fileDto();
+        var insert0 = Mono.from(dsl.transactionPublisher( trx ->
+                treeRepository.create(fileObj0, user0, trx.dsl() ).map( tree -> { trx.dsl().query( "END transaction; COMMIT;" ); return tree; }  ) ) )
+                        .flatMap(created -> fileRepository.createFileFor( created, file, user0, dsl ) );
+//        StepVerifier.create( insert0 ).expectNextCount( 1 ).verifyComplete();
+//        var insert1 = ConnectionFactoryUtils.getConnection( cfi ).flatMap( cnxn -> {
+//            var ctxt = DSL.using(cnxn);
+//            return treeRepository.create(fileObj1, user0, ctxt).flatMap(created -> fileRepository.createFileFor( created, file, user0, ctxt ) );
+//        });
+        StepVerifier.create( insert0 ).expectNextCount( 1 ).verifyComplete();
+        System.out.println("ssdkflsdf");
     }
 
 }

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.test.StepVerifier;
 
@@ -37,11 +38,12 @@ class RandomFileGeneratorTest {
     void before() {
         lenient().when( randomMock.nextLong() ).thenReturn( NOT_RANDOM_LONG );
         when( randomMock.nextInt( anyInt(), anyInt() ) ).thenCallRealMethod();
+        Mockito.lenient().doCallRealMethod()
+                .when(randomMock).nextBytes( any(byte[].class) );
         randomFileGenerator = RandomFileGenerator.builder()
                 .algorithm( "SHA-1" ).bufferSizeB( BUFFER_SIZE )
                 .random( randomMock ).build();
     }
-
 
     @DisplayName("Generate calculates the expected Checksum")
     @ParameterizedTest
@@ -73,6 +75,18 @@ class RandomFileGeneratorTest {
         StepVerifier.create( found )
                 .expectNextSequence( expected ).
                 verifyComplete();
+    }
+
+    @Test
+    @DisplayName( "generate produces a flux that can be subscribed to multiple times" )
+    void generateCreatesFluxThatCanBeShared() {
+        randomFileGenerator.setMinMaxSizeB( 8, 9 );
+        var found = randomFileGenerator.generate().data();
+        var expected = Long.reverseBytes( NOT_RANDOM_LONG );
+        StepVerifier.create( found.map( ByteBuffer::getLong ) ).expectNext( expected )
+                .verifyComplete();
+        StepVerifier.create( found.map( ByteBuffer::getLong ) ).expectNext( expected )
+                .verifyComplete();
     }
 
     @Test

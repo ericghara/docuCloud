@@ -7,6 +7,7 @@
 ;CREATE EXTENSION IF not EXISTS ltree SCHEMA public;
 ;CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+;DROP TABLE IF EXISTS tree CASCADE; DROP TYPE IF EXISTS OBJECT_TYPE;
 ;CREATE TYPE OBJECT_TYPE AS enum('ROOT','DIR', 'FILE');
 ;CREATE TABLE IF NOT EXISTS public.tree (
 	object_id uuid NOT NULL PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -18,61 +19,93 @@
 );
 ;CREATE INDEX IF NOT EXISTS tree_path_idx on tree using gist (path);
 
---create or replace function insCheck() RETURNS trigger AS $$
---begin
---	if NEW.object_type = 'ROOT' then
---		if (nlevel(NEW.PATH) != 1) then
---			raise exception 'Table constraint violation exception';
---		ELSE
---			RETURN NEW;
+CREATE OR REPLACE FUNCTION insCheck() RETURNS TRIGGER AS $$
+BEGIN
+	IF NEW.object_type = 'ROOT' THEN
+		IF (nlevel(NEW.PATH) != 0) THEN
+			RAISE EXCEPTION 'Table constraint violation exception - ROOT';
+		ELSE
+			RETURN NEW;
+		END IF;
+	ELSE
+		IF nlevel(NEW.PATH) < 1
+			OR 1 > (
+				SELECT count(object_id)
+				FROM tree
+				WHERE subpath(NEW.PATH, 0, -1) = PATH AND NEW.user_id = user_id
+			) THEN
+				RAISE EXCEPTION 'Table constraint violation exception - creates orphan';
+		ELSE
+			RETURN NEW;
+		END IF;
+	END IF;
+END;
+$$ language plpgsql;
+
+-- separate out first part with on update of object_type
+--CREATE OR REPLACE FUNCTION updCheck() RETURNS TRIGGER AS $$
+--BEGIN
+--	IF NEW.object_type <> OLD.object_type THEN
+--		RAISE EXCEPTION 'Table constraint violation - cannot modify object type';
+--	ELSEIF OLD.object_type = 'ROOT' THEN
+--		IF nlevel(NEW.PATH) != 1 THEN
+--			RAISE EXCEPTION 'Table constraint violation - ROOT nlevel must = 1';
 --		END IF;
---	ELSE
---		IF nlevel(NEW.PATH) < 2
---			OR 1 > (
---				SELECT count(object_id)
---				FROM tree
---				WHERE subpath(NEW.PATH, 0, -1) = path
+--	ELSE THEN
+--		IF nlevel(NEW.PATH) < 2 THEN
+--			RAISE EXCEPTION 'Table constraint violation - DIR or FILE nlevel must be >= 2';
+--		-- new path must have parent
+--		ELSEIF NOT EXISTS (
+--			SELECT 1
+--			FROM tree
+--			WHERE subpath(NEW.PATH, 0, -1) = PATH
 --			) THEN
---				RAISE EXCEPTION 'Table constraint violation exception';
---		ELSE
---			RETURN NEW;
+--			RAISE EXCEPTION 'Table constraint violation - DIR or FILE must have a parent';
+--		-- do move
+--		ELSEIF object_type = 'DIR' AND EXISTS (
+--			SELECT 1
+--			FROM tree
+--			WHERE OLD.PATH @> PATH) THEN
+--			RAISE EXCEPTION 'Table constraint violation - '
+--		THEN
 --		END IF;
 --	END IF;
+--	RETURN NEW;
 --END;
 --$$ language plpgsql;
---
---create or replace trigger ins before insert on tree
---for each row
---EXECUTE procedure insCheck();
---
---create or replace function leavesNoOrphans() RETURNS trigger AS $$
---begin
---	if exists (
+
+--CREATE OR REPLACE FUNCTION leavesNoOrphans() RETURNS TRIGGER AS $$
+--BEGIN
+--	IF EXISTS (
 --		-- removes edge case where an object was modified or removed and also re-added in  the same statement
---		with old_paths as (
---			select old_table.PATH
---			from old_table
---			where old_table.object_type <> 'FILE'
---				and old_table.PATH not in (select new_table.PATH from new_table)
+--		WITH old_paths AS (
+--			SELECT old_table.PATH
+--			FROM old_table
+--			WHERE old_table.object_type <> 'FILE'
+--				AND old_table.PATH NOT IN (SELECT new_table.PATH FROM new_table)
 --		)
---		select tree.PATH
---		from tree join old_paths
---		on old_paths.path @> tree.path
---	) THEN raise exception 'This operation creates an orphan, an object references a moved object';
+--		SELECT tree.PATH
+--		FROM tree JOIN old_paths
+--		ON old_paths.path @> tree.PATH
+--	) THEN RAISE EXCEPTION 'This operation creates an orphan, an object references a moved object';
 --	END IF;
 --	RETURN NULL;
 --END;
 --$$ LANGUAGE plpgsql;
---
---create or replace trigger leaves_no_orphans
---	after update on tree
---	referencing new TABLE AS new_table
---		OLD TABLE AS old_table
---	for each STATEMENT EXECUTE function leavesNoOrphans();
 
-;DROP VIEW IF EXISTS public.file_view;
-;DROP TABLE IF EXISTS public.tree_join_file;
-;DROP TABLE IF EXISTS public.file;
+
+-- ins trigger
+CREATE OR REPLACE TRIGGER ins BEFORE INSERT ON tree
+FOR EACH ROW
+EXECUTE PROCEDURE insCheck();
+
+
+-- upd triggers
+--CREATE OR REPLACE TRIGGER leaves_no_orphans
+--	AFTER UPDATE ON tree
+--	REFERENCING NEW TABLE AS new_table
+--		OLD TABLE AS old_table
+--	FOR EACH STATEMENT EXECUTE FUNCTION leavesNoOrphans();
 
 ;CREATE TABLE IF NOT EXISTS public.file (
 	file_id uuid PRIMARY KEY NOT NULL DEFAULT uuid_generate_v4(),

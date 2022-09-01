@@ -12,7 +12,6 @@ import org.jooq.Record1;
 import org.jooq.Record2;
 import org.jooq.ResultQuery;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -25,7 +24,6 @@ import static org.jooq.impl.DSL.*;
 
 @Repository
 @RequiredArgsConstructor
-@Transactional
 public class FileRepository {
 
     // TODO ensure no ref to non file objects
