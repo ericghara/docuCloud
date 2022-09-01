@@ -13,7 +13,7 @@ import com.ericgha.docuCloud.repository.testtool.file.TestFilesFactory;
 import com.ericgha.docuCloud.repository.testtool.tree.TestFileTree;
 import com.ericgha.docuCloud.repository.testtool.tree.TestFileTreeFactory;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnablePostgresTestContainer;
-import com.ericgha.docuCloud.util.comparators.FileViewDtoComparators;
+import com.ericgha.docuCloud.util.comparator.FileViewDtoComparators;
 import org.jooq.DSLContext;
 import org.jooq.Record2;
 import org.jooq.exception.DataAccessException;
@@ -23,7 +23,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.r2dbc.connection.R2dbcTransactionManager;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -124,7 +123,7 @@ class FileRepositoryIntTest {
                 """;
         TreeDto treeObjToLink = tree0.getOrigRecord( objPathStr );
         FileDto fileResToLink = files0.getOrigFileFor( fileResChecksum );
-        Long foundCount = fileRepository.createEdge( fileResToLink, treeObjToLink, user0, dsl).block();
+        Long foundCount = fileRepository.createEdge( fileResToLink, treeObjToLink, user0 ).block();
         assertEquals( 1L, foundCount );
 
         TestFileAssertion.assertRepositoryState( files0, expectedState );
@@ -143,7 +142,7 @@ class FileRepositoryIntTest {
                 """;
         TreeDto objToLink = tree0.getOrigRecord( "dir0.fileObj3" );
         FileDto newFile = FileDto.builder().checksum( "fileRes2" ).size( 2L ).build();
-        StepVerifier.create( fileRepository.createFileFor( objToLink, newFile, user0, dsl) )
+        StepVerifier.create( fileRepository.createFileFor( objToLink, newFile, user0 ) )
                 .assertNext( record -> {
                     assertEquals( objToLink.getObjectId(), record.getObjectId() );
                     assertNotNull( record.getFileId() );
@@ -164,7 +163,7 @@ class FileRepositoryIntTest {
     void createFileForReturnsEmptyIfCannotCreate() {
         TreeDto objToLink = tree1.getOrigRecord( "dir0.fileObj3" ); // notice tree1, not user's file
         FileDto newFile = FileDto.builder().checksum( "fileRes2" ).size( 2L ).build();
-        StepVerifier.create( fileRepository.createFileFor( objToLink, newFile, user0, dsl) )
+        StepVerifier.create( fileRepository.createFileFor( objToLink, newFile, user0 ) )
                 .verifyError( DataAccessException.class );
         TestFileAssertion.assertNoChanges( files0 );
         TestFileAssertion.assertNoChanges( files1 );
@@ -175,7 +174,7 @@ class FileRepositoryIntTest {
     void rmEdgeDeletesEdgeAndFileAndReturnsTrueWhenCreatesOrphan() {
         FileViewDto toDelete = ( files0.getOrigFileViewFor( "fileObj2", "fileRes1" ) );
         FileDto expectedFile = fileViewToFile.convert( toDelete );
-        StepVerifier.create( fileRepository.rmEdge( fileViewToTreeJoinFile.convert( toDelete ), user0, dsl) )
+        StepVerifier.create( fileRepository.rmEdge( fileViewToTreeJoinFile.convert( toDelete ), user0 ) )
                 .assertNext( rec2 -> {
                     assertEquals( toDelete.getFileId(), rec2.get( "file_id" ) );
                     assertEquals( true, rec2.get( "orphan" ) );
@@ -196,7 +195,7 @@ class FileRepositoryIntTest {
     void rmEdgeDeletesEdgeAndReturnsFalseWhenNotCreatesOrphan() {
         FileViewDto toDelete = ( files0.getOrigFileViewFor( "fileObj0", "fileRes0" ) );
         FileDto expectedFile = fileViewToFile.convert( toDelete );
-        StepVerifier.create( fileRepository.rmEdge( fileViewToTreeJoinFile.convert( toDelete ), user0, dsl) )
+        StepVerifier.create( fileRepository.rmEdge( fileViewToTreeJoinFile.convert( toDelete ), user0 ) )
                 .assertNext( rec2 -> {
                     assertEquals( toDelete.getFileId(), rec2.get( "file_id" ) );
                     assertEquals( false, rec2.get( "orphan" ) );
@@ -217,7 +216,7 @@ class FileRepositoryIntTest {
     void rmEdgeReturnsEmptyWhenNoFile() {
         // notice files1, not user0's file
         FileViewDto toDelete = ( files1.getOrigFileViewFor( "fileObj0", "fileRes0" ) );
-        StepVerifier.create( fileRepository.rmEdge( fileViewToTreeJoinFile.convert( toDelete ), user0, dsl) )
+        StepVerifier.create( fileRepository.rmEdge( fileViewToTreeJoinFile.convert( toDelete ), user0 ) )
                 .expectNextCount( 0 )
                 .verifyComplete();
         TestFileAssertion.assertNoChanges( files0 );
@@ -245,7 +244,7 @@ class FileRepositoryIntTest {
         UUID fileRes1Id = files0.getOrigFileFor( "fileRes1" ).getFileId();
         // expect fileRes1 to be deleted from files table, and only edge removed for fileRes1
         Map<UUID, Boolean> expected = Map.of( fileRes0Id, false, fileRes1Id, true );
-        StepVerifier.create( fileRepository.rmEdgesFrom( fileObj2Id, user0, dsl) )
+        StepVerifier.create( fileRepository.rmEdgesFrom( fileObj2Id, user0 ) )
                 .thenConsumeWhile( rec2 -> {
                     UUID curId = rec2.get( FILE_VIEW.FILE_ID );
                     assertTrue( expected.containsKey( curId ), "unexpected file node" );
@@ -279,7 +278,7 @@ class FileRepositoryIntTest {
                 """;
         UUID sourceId = tree0.getOrigRecord("fileObj2").getObjectId();
         UUID destId = tree0.getOrigRecord("dir0.fileObj3").getObjectId();
-        StepVerifier.create(fileRepository.cpNewestFile( sourceId, destId, user0, dsl) )
+        StepVerifier.create(fileRepository.cpNewestFile( sourceId, destId, user0 ) )
                 .expectNext( 1L )
                 .verifyComplete();
         TestFileAssertion.assertRepositoryState( files0, expectedState );
@@ -320,7 +319,7 @@ class FileRepositoryIntTest {
             fileObj2, fileRes1
             fileObj2, fileRes3 <- newest
          */
-        StepVerifier.create( fileRepository.lsNewestFilesFor( source, 1, user0, dsl) )
+        StepVerifier.create( fileRepository.lsNewestFilesFor( source, 1, user0 ) )
                 .expectNext( expected ).verifyComplete();
     }
 
@@ -348,7 +347,7 @@ class FileRepositoryIntTest {
             // add 1 to i because we expect records after current (we are seeking)
             int expectedLast = Math.min( i + 1 + NUM_RECORDS, allInOrder.size() );
             List<FileViewDto> expected = allInOrder.subList( i+1, expectedLast );
-            StepVerifier.create( fileRepository.lsNextFilesFor( allInOrder.get( i ), NUM_RECORDS, user0, dsl) )
+            StepVerifier.create( fileRepository.lsNextFilesFor( allInOrder.get( i ), NUM_RECORDS, user0 ) )
                     .expectNextSequence( expected )
                     .verifyComplete();
         }
@@ -359,7 +358,7 @@ class FileRepositoryIntTest {
     void countFilesForCountsFileResLinkedToFileObj() {
         TreeDto source = tree0.getOrigRecord( "fileObj0" );
         long expectedCnt = files0.getOrigFileViewsFor( source.getPathStr() ).size();
-        StepVerifier.create( fileRepository.countFilesFor( source, user0, dsl) )
+        StepVerifier.create( fileRepository.countFilesFor( source, user0 ) )
                 .expectNext( expectedCnt )
                 .verifyComplete();
     }
@@ -385,8 +384,8 @@ class FileRepositoryIntTest {
         UUID fileRes0Id = files0.getOrigFileFor( "fileRes0" ).getFileId();
         UUID fileRes1Id = files0.getOrigFileFor( "fileRes1" ).getFileId();
         Flux<Record2<UUID,Boolean>> deleted = Flux.from(dsl.transactionPublisher(trx ->
-                treeRepository.rmNormal(fileObj2, user0, trx.dsl() )
-                        .flatMapMany( treeDto ->  fileRepository.rmEdgesFrom( treeDto.getObjectId(), user0, trx.dsl() ) ) ) );
+                treeRepository.rmNormal(fileObj2, user0 )
+                        .flatMapMany( treeDto ->  fileRepository.rmEdgesFrom( treeDto.getObjectId(), user0 ) ) ) );
         Map<UUID, Boolean> expected = Map.of( fileRes0Id, false, fileRes1Id, true );
         assertNotNull( tree0.fetchCurRecord( fileObj2 ) );
         StepVerifier.create( deleted )
@@ -406,7 +405,7 @@ class FileRepositoryIntTest {
     @Test
     @DisplayName( "deleteMe 2" )
     // todo delete me
-    public void deleteMe2(@Autowired TreeRepository treeRepository, @Autowired R2dbcTransactionManager transactionManager,
+    public void deleteMe2(@Autowired TreeRepository treeRepository,
                           @Autowired TransactionalOperator transactionalOperator) {
         RandomFileGenerator randomFileGenerator = new RandomFileGenerator();
         // also remember to delete cfi autowire
@@ -415,9 +414,9 @@ class FileRepositoryIntTest {
                 .objectType( FILE )
                 .build();
         FileDto file = randomFileGenerator.generate().fileDto();
-        var insert0 = Mono.from(dsl.transactionPublisher( trx ->
-                treeRepository.create(fileObj0, user0, trx.dsl() ).map( tree -> { trx.dsl().query( "END transaction; COMMIT;" ); return tree; }  ) ) )
-                        .flatMap(created -> fileRepository.createFileFor( created, file, user0, dsl ) );
+        var insert0 =
+                treeRepository.create(fileObj0, user0 )
+                        .flatMap(created -> fileRepository.createFileFor( created, file, user0 ) );
 //        StepVerifier.create( insert0 ).expectNextCount( 1 ).verifyComplete();
 //        var insert1 = ConnectionFactoryUtils.getConnection( cfi ).flatMap( cnxn -> {
 //            var ctxt = DSL.using(cnxn);

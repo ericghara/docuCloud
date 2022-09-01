@@ -81,7 +81,7 @@ public class DocumentServiceIntTest {
                 TreeDto.builder().objectType( ROOT )
                         .path( Ltree.valueOf( "" ) )
                         .build(),
-                user0, dsl ).block();
+                user0 ).block();
     }
 
     /*
@@ -203,7 +203,7 @@ public class DocumentServiceIntTest {
         FileDto fileDto = randomFileGenerator.generate().fileDto();
         var insert = documentService.test( fileObj0, fileDto, user0 );
         insert.as( StepVerifier::create ).expectNextCount( 1 ).verifyComplete();
-        treeRepository.ls( fileObj0, user0, dsl ).map(newFile -> fileRepository.lsNewestFileFor( newFile , user0, dsl ) )
+        treeRepository.ls( fileObj0, user0 ).map( newFile -> fileRepository.lsNewestFileFor( newFile , user0, dsl ) )
                 .as( StepVerifier::create ).expectNextCount( 1 ).verifyComplete();
         System.out.println( "sdfsd" );
     }

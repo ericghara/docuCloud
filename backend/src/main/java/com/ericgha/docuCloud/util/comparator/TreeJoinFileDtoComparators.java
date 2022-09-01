@@ -1,4 +1,4 @@
-package com.ericgha.docuCloud.util.comparators;
+package com.ericgha.docuCloud.util.comparator;
 
 
 import com.ericgha.docuCloud.dto.TreeJoinFileDto;

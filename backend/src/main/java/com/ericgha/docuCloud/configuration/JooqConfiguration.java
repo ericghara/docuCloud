@@ -1,6 +1,6 @@
 package com.ericgha.docuCloud.configuration;
 
-import com.ericgha.docuCloud.service.TransactionAwareDsl;
+import com.ericgha.docuCloud.service.JooqTransaction;
 import io.r2dbc.spi.ConnectionFactory;
 import lombok.AllArgsConstructor;
 import org.jooq.DSLContext;
@@ -36,13 +36,12 @@ public class JooqConfiguration {
     // are not transaction aware.
     @Bean
     public DSLContext jooqDslContext() {
-        return DSL.using( cfi, DSL_DIALECT, DSL_SETTINGS )
-                .dsl();
+        return DSL.using( cfi, DSL_DIALECT, DSL_SETTINGS );
     }
 
     @Bean
-    public TransactionAwareDsl dslPublisher(@Autowired DSLContext dsl) {
-        return new TransactionAwareDsl(cfi, DSL_DIALECT, DSL_SETTINGS);
+    public JooqTransaction dslPublisher() {
+        return new JooqTransaction(cfi, DSL_DIALECT, DSL_SETTINGS);
     }
 
 //    @Bean

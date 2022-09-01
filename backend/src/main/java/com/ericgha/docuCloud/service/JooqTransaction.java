@@ -7,6 +7,7 @@ import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
 import org.jooq.conf.Settings;
 import org.jooq.impl.DSL;
+import org.reactivestreams.Publisher;
 import org.springframework.r2dbc.connection.ConnectionFactoryUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -14,7 +15,7 @@ import reactor.core.publisher.Mono;
 import java.util.function.Function;
 
 @RequiredArgsConstructor
-public class TransactionAwareDsl {
+public class JooqTransaction {
 
     private final ConnectionFactory cfi;
     private final SQLDialect sqlDialect;
@@ -27,12 +28,12 @@ public class TransactionAwareDsl {
                 .map(c -> DSL.using(c, sqlDialect, dslSettings) );
     }
 
-    public <T> Mono<T> transact(@NonNull Function<DSLContext, Mono<T>> monoFunction) {
-        return this.get().flatMap( monoFunction );
+    public <T> Mono<T> transact(@NonNull Function<DSLContext, Publisher<T>> monoFunction) {
+        return this.get().flatMap( trxDsl -> Mono.from(monoFunction.apply(trxDsl) ) );
     }
 
-    public <T> Flux<T> transactMany(@NonNull Function<DSLContext, Flux<T>> fluxFunction) {
-        return this.get().flatMapMany( fluxFunction );
+    public <T> Flux<T> transactMany(@NonNull Function<DSLContext, Publisher<T>> fluxFunction) {
+        return this.get().flatMapMany( trxDsl -> Flux.from(fluxFunction.apply(trxDsl) ) );
     }
 
 

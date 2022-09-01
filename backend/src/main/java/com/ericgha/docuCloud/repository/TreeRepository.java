@@ -2,9 +2,12 @@ package com.ericgha.docuCloud.repository;
 
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.TreeDto;
+import com.ericgha.docuCloud.exceptions.IllegalObjectTypeException;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.jooq.tables.Tree;
 import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
+import com.ericgha.docuCloud.service.JooqTransaction;
+import com.ericgha.docuCloud.util.validator.TreeDtoValidator;
 import lombok.RequiredArgsConstructor;
 import org.jooq.CommonTableExpression;
 import org.jooq.DSLContext;
@@ -28,6 +31,8 @@ import java.util.UUID;
 
 import static com.ericgha.docuCloud.jooq.Routines.*;
 import static com.ericgha.docuCloud.jooq.Tables.TREE;
+import static com.ericgha.docuCloud.jooq.enums.ObjectType.DIR;
+import static com.ericgha.docuCloud.jooq.enums.ObjectType.FILE;
 import static org.jooq.impl.DSL.*;
 
 @Repository
@@ -36,11 +41,12 @@ import static org.jooq.impl.DSL.*;
 public class TreeRepository {
 
     // TODO lsDir(Ltree path, CloudUser clouduser)
+    private final JooqTransaction jooqTx;
 
 
     // required treeDto fields: objectType, path
-    public Mono<TreeDto> create(TreeDto treeDto, CloudUser cloudUser, DSLContext dsl) {
-        return Mono.from( dsl.insertInto( TREE )
+    public Mono<TreeDto> create(TreeDto treeDto, CloudUser cloudUser) {
+        return jooqTx.transact( dsl -> dsl.insertInto( TREE )
                         .set( TREE.OBJECT_ID, UUID.randomUUID() )
                         .set( TREE.OBJECT_TYPE, treeDto.getObjectType() )
                         .set( TREE.PATH, treeDto.getPath() )
@@ -51,109 +57,107 @@ public class TreeRepository {
     }
 
 
-    public Mono<Long> mvFile(TreeDto source, Ltree destination, CloudUser cloudUser, DSLContext dsl) {
-        if (source.getObjectType() != ObjectType.FILE) {
+    public Mono<Long> mvFile(TreeDto source, Ltree destination, CloudUser cloudUser) {
+        if (source.getObjectType() != FILE) {
             return Mono.empty();
         }
-        return Mono.from( dsl.update( TREE )
+        return jooqTx.transact( dsl -> dsl.update( TREE )
                         .set( TREE.PATH, destination )
                         .where( TREE.OBJECT_ID.eq( source.getObjectId() )
                                 .and( TREE.USER_ID.eq( cloudUser.getUserId() ) )
-                                .and( TREE.OBJECT_TYPE.eq( ObjectType.FILE ) ) )
+                                .and( TREE.OBJECT_TYPE.eq( FILE ) ) )
                 )
                 // This is a workaround for a jOOQ bug, Method signature is Integer but actually returns a Long at runtime
                 .map( (Number o) -> o.longValue() );
     }
 
 
-    public Mono<Long> mvDir(TreeDto source, Ltree destination, CloudUser cloudUser, DSLContext dsl) {
-        if (source.getObjectType() != ObjectType.DIR) {
-            return Mono.empty();
-        }
-        var movePathCte = name( "new" ).fields( "object_id", "path" )
-                .as( createMovePath( destination, source, cloudUser, dsl ) );
-        return Mono.from( dsl.with( movePathCte )
-                        .update( TREE )
-                        .set( TREE.PATH, movePathCte.field( "path", Ltree.class ) )
-                        .from( movePathCte )
-                        .where( TREE.OBJECT_ID.eq( movePathCte.field( "object_id", UUID.class ) ) ) )
+    public Mono<Long> mvDir(TreeDto source, Ltree destination, CloudUser cloudUser) throws IllegalObjectTypeException {
+        TreeDtoValidator.mustBeObjectType( source, DIR );
+        return jooqTx.transact( dsl -> {
+                    var movePathCte = name( "new" ).fields( "object_id", "path" )
+                            .as( createMovePath( destination, source, cloudUser, dsl ) );
+                    return dsl.with( movePathCte )
+                            .update( TREE )
+                            .set( TREE.PATH, movePathCte.field( "path", Ltree.class ) )
+                            .from( movePathCte )
+                            .where( TREE.OBJECT_ID.eq( movePathCte.field( "object_id", UUID.class ) ) );
+                } )
                 // This is a workaround for a jOOQ bug, Method signature is Integer but actually returns a Long at runtime
                 .map( (Number o) -> o.longValue() );
     }
 
 
-    public Flux<TreeDto> rmDirRecursive(TreeDto record, CloudUser cloudUser, DSLContext dsl) {
-        if (record.getObjectType() != ObjectType.DIR) {
-            return Flux.empty();
-        }
-        // Doesn't perform internal check of proper objectType as a creating a subtree from a spoofed file is not expensive
-        SelectConditionStep<Record1<UUID>> delObjectIds = selectDescendents( record, cloudUser, dsl );
-        return Flux.from( dsl.delete( TREE )
-                        .where( TREE.OBJECT_ID.in( delObjectIds ) )
-                        .returning( asterisk() ) )
+    public Flux<TreeDto> rmDirRecursive(TreeDto record, CloudUser cloudUser) throws IllegalObjectTypeException {
+        TreeDtoValidator.mustBeObjectType( record, DIR );
+        return jooqTx.transactMany( dsl -> {
+                    // Doesn't perform internal check of proper objectType as a creating a subtree from a spoofed file is not expensive
+                    SelectConditionStep<Record1<UUID>> delObjectIds = selectDescendents( record, cloudUser, dsl );
+                    return dsl.delete( TREE )
+                            .where( TREE.OBJECT_ID.in( delObjectIds ) )
+                            .returning( asterisk() );
+                } )
                 .map( TreeDto::fromRecord );
     }
 
-
-    public Mono<TreeDto> rmNormal(TreeDto record, CloudUser cloudUser, DSLContext dsl) {
-        // Doesn't perform internal check of proper objectType as a creating a subtree from a spoofed file is not expensive
-        SelectJoinStep<Record1<Integer>> doDel = hasDescendents( record, cloudUser, dsl );
-        return Mono.from(
-                        dsl.delete( TREE )
-                                .where( TREE.OBJECT_ID.eq( record.getObjectId() )
-                                        .and( val( 1 ).eq( doDel ) ) )
-                                .returning( asterisk() ) )
+    public Mono<TreeDto> rmNormal(TreeDto record, CloudUser cloudUser) {
+        return jooqTx.transact( dsl -> {
+                    // Doesn't perform internal check of proper objectType as a creating a subtree from a spoofed file is not expensive
+                    SelectJoinStep<Record1<Integer>> doDel = hasDescendents( record, cloudUser, dsl );
+                    return dsl.delete( TREE )
+                            .where( TREE.OBJECT_ID.eq( record.getObjectId() )
+                                    .and( val( 1 ).eq( doDel ) ) )
+                            .returning( asterisk() );
+                } )
                 .map( TreeDto::fromRecord );
     }
 
     // returning source_id, destination_id, object_type
-    public Flux<Record3<UUID, UUID, ObjectType>> cpDir(TreeDto sourceRecord, Ltree destination, CloudUser cloudUser, DSLContext dsl) {
-        if (sourceRecord.getObjectType() != ObjectType.DIR) {
-            return Flux.empty();
-        }
-        var selectRecordCopies = fetchDirCopyRecords( destination, sourceRecord, cloudUser, dsl );
-        return Flux.from( cpCommon( selectRecordCopies, dsl ) );
+    public Flux<Record3<UUID, UUID, ObjectType>> cpDir(TreeDto source, Ltree destination, CloudUser cloudUser) {
+        TreeDtoValidator.mustBeObjectType( source, DIR );
+        return jooqTx.transactMany( dsl -> {
+            var selectRecordCopies = fetchDirCopyRecords( destination, source, cloudUser, dsl );
+            return cpCommon( selectRecordCopies, dsl );
+        } );
     }
 
 
     // Returning ObjectType is a compromise for code usability with cpDir, it will of course always be ObjectType.FILE
-    public Mono<Record3<UUID, UUID, ObjectType>> cpFile(TreeDto sourceRecord, Ltree destination, CloudUser cloudUser, DSLContext dsl) {
-        if (sourceRecord.getObjectType() != ObjectType.FILE) {
-            return Mono.empty();
-        }
-        var selectRecordCopies = fetchFileCopyRecords( destination, sourceRecord, cloudUser, dsl );
-        return Mono.from( cpCommon( selectRecordCopies, dsl ) );
+    public Mono<Record3<UUID, UUID, ObjectType>> cpFile(TreeDto source, Ltree destination, CloudUser cloudUser) {
+        TreeDtoValidator.mustBeObjectType( source, FILE );
+        return jooqTx.transact( dsl -> {
+            var selectRecordCopies = fetchFileCopyRecords( destination, source, cloudUser, dsl );
+            return cpCommon( selectRecordCopies, dsl );
+        } );
     }
 
     /**
-     * This works a little differently than a traditional UNIX ls.  The direct
-     * descendents of the source are returned along WITH the source.  This allows
-     * differentiation between <ol><li>The parent has no children</li>
+     * This works a little differently than a traditional UNIX ls.  The direct descendents of the source are returned
+     * along WITH the source.  This allows differentiation between <ol><li>The parent has no children</li>
      * <li>The parent does not exist.</li></ol>  (1) will return only the source
      * and (2) will return a null set.
      * <br><br>
-     * This query is designed to be flexible, and allows TreeDtos that define
-     * one or both of, {@code objectId}, {@code path}.  If both are specified
-     * a match based on both is used.
+     * This query is designed to be flexible, and allows TreeDtos that define one or both of, {@code objectId},
+     * {@code path}.  If both are specified a match based on both is used.
      *
      * @param source
      * @param cloudUser
-     * @param dsl
-     * @return records (if any) ordered by path ascending.  Source, if found,
-     * is guaranteed to be the first record returned.  If source is NOT found
-     * will always return null set.
+     * @return records (if any) ordered by path ascending.  Source, if found, is guaranteed to be the first record
+     * returned.  If source is NOT found will always return null set.
      */
-    public Flux<TreeDto> ls(TreeDto source, CloudUser cloudUser, DSLContext dsl) {
-        CommonTableExpression<TreeRecord> parent = name( "parent" ).as(
-                this.flexibleSelect( source, cloudUser, dsl ) );
-        return Flux.from( dsl.with( parent )
-                        .select( TREE.asterisk() )
-                        .from( TREE, parent )
-                        .where( ltreeIsparent( parent.field( TREE.PATH ), TREE.PATH ) )
-                        .and( nlevel( TREE.PATH ).le(nlevel( parent.field( TREE.PATH ) ).plus( 1 ) ) )
-                        .and( TREE.USER_ID.eq( cloudUser.getUserId() ) )
-                        .orderBy( TREE.PATH.asc() )
-                        .coerce( TREE ) )
+    public Flux<TreeDto> ls(TreeDto source, CloudUser cloudUser) {
+        return jooqTx.transactMany( dsl -> {
+                    CommonTableExpression<TreeRecord> parent = name( "parent" ).as(
+                            this.flexibleSelect( source, cloudUser, dsl ) );
+                    return dsl.with( parent )
+                            .select( TREE.asterisk() )
+                            .from( TREE, parent )
+                            .where( ltreeIsparent( parent.field( TREE.PATH ), TREE.PATH ) )
+                            .and( nlevel( TREE.PATH ).le( nlevel( parent.field( TREE.PATH ) ).plus( 1 ) ) )
+                            .and( TREE.USER_ID.eq( cloudUser.getUserId() ) )
+                            .orderBy( TREE.PATH.asc() )
+                            .coerce( TREE );
+                } )
                 .map( TreeDto::fromRecord );
     }
 
@@ -182,7 +186,7 @@ public class TreeRepository {
                         nlevel( TREE.PATH ).as( "level" ) )
                 .from( TREE )
                 .where( TREE.OBJECT_ID.eq( curRecord.getObjectId() ).and( TREE.USER_ID.eq( cloudUser.getUserId() ) )
-                        .and( TREE.OBJECT_TYPE.eq( ObjectType.DIR ) ) );
+                        .and( TREE.OBJECT_TYPE.eq( DIR ) ) );
     }
 
     ResultQuery<Record2<UUID, Ltree>> createMovePath(Ltree newPath, TreeDto curRecord, CloudUser cloudUser, DSLContext dsl) {
@@ -215,7 +219,7 @@ public class TreeRepository {
         // went to CTE because in jOOQ seemed a little easier
         var selectDescCte = name( "descendents" )
                 .fields( "count" )
-                .as( select( TREE.OBJECT_ID )
+                .as( dsl.select( TREE.OBJECT_ID )
                         .from( TREE )
                         .where( TREE.USER_ID.eq( cloudUser.getUserId() )
                                 .and( ltreeIsparent(
@@ -276,7 +280,7 @@ public class TreeRepository {
                 .from( TREE )
                 .where( TREE.OBJECT_ID.eq( sourceRecord.getObjectId() )
                         .and( TREE.USER_ID.eq( cloudUser.getUserId() ) )
-                        .and( TREE.OBJECT_TYPE.eq( ObjectType.FILE ) ) );
+                        .and( TREE.OBJECT_TYPE.eq( FILE ) ) );
     }
 
     SelectConditionStep<Record1<Boolean>> isObjectType(ObjectType objectType, TreeDto treeDto, CloudUser cloudUser, DSLContext dsl) {
@@ -285,5 +289,10 @@ public class TreeRepository {
                 .where( Tree.TREE.OBJECT_ID.eq( treeDto.getObjectId() )
                         .and( Tree.TREE.OBJECT_TYPE.eq( objectType ) )
                         .and( Tree.TREE.USER_ID.eq( cloudUser.getUserId() ) ) );
+    }
+
+    //todo delete me
+    SelectConditionStep<TreeRecord> selectAll(CloudUser cloudUser, DSLContext dsl) {
+        return dsl.selectFrom( TREE ).where( TREE.USER_ID.eq(cloudUser.getUserId() ) );
     }
 }
