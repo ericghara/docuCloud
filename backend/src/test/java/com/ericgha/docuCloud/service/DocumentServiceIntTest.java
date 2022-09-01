@@ -1,9 +1,11 @@
 package com.ericgha.docuCloud.service;
 
 import com.ericgha.docuCloud.dto.CloudUser;
+import com.ericgha.docuCloud.dto.FileDto;
 import com.ericgha.docuCloud.dto.TreeAndFileView;
 import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.exceptions.InsertFailureException;
+import com.ericgha.docuCloud.repository.FileRepository;
 import com.ericgha.docuCloud.repository.TreeRepository;
 import com.ericgha.docuCloud.repository.testtool.file.RandomFileGenerator;
 import com.ericgha.docuCloud.repository.testtool.file.RandomFileGenerator.FileDtoAndData;
@@ -79,7 +81,7 @@ public class DocumentServiceIntTest {
                 TreeDto.builder().objectType( ROOT )
                         .path( Ltree.valueOf( "" ) )
                         .build(),
-                user0, dsl).block();
+                user0, dsl ).block();
     }
 
     /*
@@ -123,7 +125,7 @@ public class DocumentServiceIntTest {
     @DisplayName("Create dir returns treeDto")
     void createDirReturnsTreeDto() {
         TreeDto dir0 = TreeDto.builder()
-                .path( Ltree.valueOf("dir0") )
+                .path( Ltree.valueOf( "dir0" ) )
                 .objectType( DIR )
                 .build();
         StepVerifier.create( documentService.createDir( dir0, user0 ) )
@@ -136,10 +138,10 @@ public class DocumentServiceIntTest {
     }
 
     @Test
-    @DisplayName( "createDir throws Insertion error when failure to insert" )
+    @DisplayName("createDir throws Insertion error when failure to insert")
     void createDirThrows() {
         TreeDto dir0 = TreeDto.builder()
-                .path( Ltree.valueOf("dir0") )
+                .path( Ltree.valueOf( "dir0" ) )
                 .objectType( DIR )
                 .build();
         // user1 has no root folder, so this creates an orphan
@@ -148,9 +150,9 @@ public class DocumentServiceIntTest {
     }
 
     @Test
-    @DisplayName( "createFile returns TreeAndFileView on successful file creation" )
+    @DisplayName("createFile returns TreeAndFileView on successful file creation")
     void createFileReturnsTreeAndFileViewOnSuccess() {
-        TreeDto fileObj0 = TreeDto.builder().path(Ltree.valueOf("file0") )
+        TreeDto fileObj0 = TreeDto.builder().path( Ltree.valueOf( "file0" ) )
                 .objectType( FILE )
                 .build();
         FileDtoAndData fileAndData = randomFileGenerator.generate();
@@ -163,30 +165,30 @@ public class DocumentServiceIntTest {
 
 
     @Test
-    @DisplayName( "createFile throws InsertFailureException when no insert" )
+    @DisplayName("createFile throws InsertFailureException when no insert")
     void createFileThrowsInsertFailureException() {
         // creates orphan
-        TreeDto fileObj0 = TreeDto.builder().path(Ltree.valueOf("dir0.file0") )
+        TreeDto fileObj0 = TreeDto.builder().path( Ltree.valueOf( "dir0.file0" ) )
                 .objectType( FILE )
                 .build();
         FileDtoAndData fileAndData = randomFileGenerator.generate();
         Mono<TreeAndFileView> insertReq = documentService.createFile( fileObj0, fileAndData.fileDto(), fileAndData.data(), user0 );
         StepVerifier.create( insertReq )
-                .verifyError(InsertFailureException.class);
+                .verifyError( InsertFailureException.class );
     }
 
     @Test
-    @DisplayName( "addFileVersion returns TreeAndFileView on successful PUT" )
+    @DisplayName("addFileVersion returns TreeAndFileView on successful PUT")
     void addFileVersionReturnsTreeAndFileView() {
-        TreeDto fileObj0 = TreeDto.builder().path(Ltree.valueOf("file0") )
+        TreeDto fileObj0 = TreeDto.builder().path( Ltree.valueOf( "file0" ) )
                 .objectType( FILE )
                 .build();
         FileDtoAndData fileAndData0 = randomFileGenerator.generate();
         FileDtoAndData fileAndData1 = randomFileGenerator.generate();
         // create the file
         Mono<TreeAndFileView> insertReq = documentService.createFile( fileObj0, fileAndData0.fileDto(), fileAndData0.data(), user0 )
-                .map(TreeAndFileView::treeDto)
-                .flatMap(fullTreeDto -> documentService.addFileVersion( fullTreeDto, fileAndData1.fileDto(), fileAndData1.data(), user0 ) );
+                .map( TreeAndFileView::treeDto )
+                .flatMap( fullTreeDto -> documentService.addFileVersion( fullTreeDto, fileAndData1.fileDto(), fileAndData1.data(), user0 ) );
         StepVerifier.create( insertReq )
                 .expectNextCount( 1 )
                 .verifyComplete();
@@ -194,12 +196,15 @@ public class DocumentServiceIntTest {
 
     @Test
     @DisplayName("Test jooq insert")
-    void testInsert() {
-        TreeDto fileObj0 = TreeDto.builder().path(Ltree.valueOf("file0") )
+    void testInsertCommits(@Autowired FileRepository fileRepository) throws InterruptedException {
+        TreeDto fileObj0 = TreeDto.builder().path( Ltree.valueOf( "file0" ) )
                 .objectType( FILE )
                 .build();
-        var insert = documentService.test( fileObj0, user0 );
-        StepVerifier.create( insert ).expectNextCount( 1 ).verifyComplete();
-        System.out.println("sdfsd");
+        FileDto fileDto = randomFileGenerator.generate().fileDto();
+        var insert = documentService.test( fileObj0, fileDto, user0 );
+        insert.as( StepVerifier::create ).expectNextCount( 1 ).verifyComplete();
+        treeRepository.ls( fileObj0, user0, dsl ).map(newFile -> fileRepository.lsNewestFileFor( newFile , user0, dsl ) )
+                .as( StepVerifier::create ).expectNextCount( 1 ).verifyComplete();
+        System.out.println( "sdfsd" );
     }
 }

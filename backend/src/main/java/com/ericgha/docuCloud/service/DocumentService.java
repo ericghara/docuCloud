@@ -21,15 +21,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.jooq.Configuration;
 import org.jooq.DSLContext;
 import org.jooq.Record3;
-import org.jooq.impl.DSL;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.reactivestreams.Publisher;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -43,15 +42,17 @@ import static com.ericgha.docuCloud.jooq.enums.ObjectType.*;
 import static com.ericgha.docuCloud.jooq.tables.Tree.TREE;
 
 @Service
+@Profile("(test & s3) | !test")
+@Transactional
 @RequiredArgsConstructor
 @Slf4j
-@Profile("(test & s3) | !test")
 public class DocumentService {
 
     private final FileStore fileStore;
     private final FileRepository fileRepository;
     private final TreeRepository treeRepository;
-    private final DSLContext dsl;
+    private final DSLContext dsl; // todo remove
+    private final TransactionAwareDsl trxDslPublisher;
 
     private final Converter<FileViewDto, FileDto> fileViewToFile;
 
@@ -95,17 +96,17 @@ public class DocumentService {
     }
 
     public Mono<Void> rmTreeObject(TreeDto record, @NonNull Boolean recursive, CloudUser cloudUser) {
-        Function<Configuration, Publisher<Void>> rmTrans = trx -> {
+        Function<DSLContext, Mono<Void>> rmTrans = trxDsl -> {
             Flux<UUID> versionsToDelete = Mono.just( recursive )
-                    .flatMapMany( b -> b ? treeRepository.rmDirRecursive( record, cloudUser, trx.dsl() ) :
-                            treeRepository.rmNormal( record, cloudUser, trx.dsl() ).flux() )
+                    .flatMapMany( b -> b ? treeRepository.rmDirRecursive( record, cloudUser, trxDsl ) :
+                            treeRepository.rmNormal( record, cloudUser, trxDsl ).flux() )
                     .map( TreeDto::getObjectId )
-                    .flatMap( objectId -> fileRepository.rmEdgesFrom( objectId, cloudUser, trx.dsl() ) )
+                    .flatMap( objectId -> fileRepository.rmEdgesFrom( objectId, cloudUser, trxDsl ) )
                     .filter( record2 -> record2.get( "orphan", Boolean.class ) )
                     .map( record2 -> record2.get( "file_id", UUID.class ) );
             return fileStore.deleteFiles( versionsToDelete, cloudUser );
         };
-        return Mono.from( this.transact( rmTrans ) );
+        return trxDslPublisher.transact( rmTrans );
     }
 
     public Mono<Void> rmVersion(TreeDto treeDto, FileDto fileDto, CloudUser cloudUser) {
@@ -153,20 +154,11 @@ public class DocumentService {
         return Mono.from( this.transact( createTrans ) );
     }
 
-    Mono<TreeAndFileView> test(TreeDto treeDto, CloudUser cloudUser) {
-//        Function<Configuration, Publisher<TreeDto>> createTrans = trx ->
-//                PublisherUtil.requireNext(
-//                        treeRepository.create( treeDto, cloudUser, trx.dsl() ),
-//                        e -> new InsertFailureException( "TreeRepository", e) );
-        return Mono.from(dsl.transactionPublisher( trx ->
-            Mono.from(trx.connectionFactory().create() )
-                    .flatMap(cnxn -> treeRepository.create( treeDto, cloudUser, DSL.using(cnxn) )
-                            .publishOn( Schedulers.boundedElastic() )
-                            .doOnSuccess( s -> Mono.from(cnxn.commitTransaction() ).subscribe() ) ) ) )
-
-                    .flatMap( created -> this.ls(TreeDto.builder().path(Ltree.valueOf( "" ) )
-                                    .build(),cloudUser)
-                            .next() );
+    // todo delete me
+    public Mono<TreeAndFileView> test(TreeDto treeDto, FileDto fileDto, CloudUser cloudUser) {
+        return trxDslPublisher.get().flatMap( trxDsl -> treeRepository.create( treeDto, cloudUser, trxDsl ) )
+            .zipWhen(newTreeDto -> trxDslPublisher.get().flatMap( trxDsl -> fileRepository.createFileFor( newTreeDto, fileDto, cloudUser, trxDsl ) ) )
+                .map(tup2 -> new TreeAndFileView(tup2.getT1(), tup2.getT2() ) );
     }
 
     // The only Information used from treeDto is objectId.  The only

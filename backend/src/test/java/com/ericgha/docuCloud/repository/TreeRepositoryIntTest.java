@@ -636,4 +636,14 @@ class TreeRepositoryIntTest {
         StepVerifier.create( treeRepository.ls( parent, user0, dsl ) )
                 .expectNextCount(0).verifyComplete();
     }
+
+    @Test
+    @DisplayName( "ls returns only parent if parent is a file" )
+    void lsReturnsParentWhenParentIsFile() {
+        TestFileTree tree0 = treeFactory.constructDefault( user0 );
+        // selectivity challenge
+        TestFileTree tree1 = treeFactory.constructDefault( user1 );
+        TreeDto source = tree0.getOrigRecord( "file0" );
+        treeRepository.ls(source, user0, dsl).as(StepVerifier::create).expectNext(source).verifyComplete();
+    }
 }

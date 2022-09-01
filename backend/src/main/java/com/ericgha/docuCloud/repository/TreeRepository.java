@@ -18,6 +18,7 @@ import org.jooq.SelectJoinStep;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.reactivestreams.Publisher;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -31,6 +32,7 @@ import static org.jooq.impl.DSL.*;
 
 @Repository
 @RequiredArgsConstructor
+@Transactional
 public class TreeRepository {
 
     // TODO lsDir(Ltree path, CloudUser clouduser)
@@ -162,8 +164,7 @@ public class TreeRepository {
         if (Objects.isNull( objectId ) && Objects.isNull( path )) {
             throw new IllegalArgumentException( "One or both of objectId and path must be non-null.  Instead both were null" );
         }
-        var conditions = TREE.USER_ID.eq( Objects.requireNonNull( cloudUser.getUserId(), "userId was null" ) )
-                .and( TREE.OBJECT_TYPE.ne( ObjectType.FILE ) );
+        var conditions = TREE.USER_ID.eq( Objects.requireNonNull( cloudUser.getUserId(), "userId was null" ) );
         if (Objects.nonNull( objectId )) {
             conditions = conditions.and( val( objectId ).eq( TREE.OBJECT_ID ) );
         }
