@@ -2,12 +2,11 @@ package com.ericgha.docuCloud.repository.testtool.tree;
 
 import com.ericgha.docuCloud.dto.TreeDto;
 import com.ericgha.docuCloud.jooq.enums.ObjectType;
+import com.ericgha.docuCloud.service.JooqTransaction;
 import lombok.RequiredArgsConstructor;
-import org.jooq.DSLContext;
 import org.jooq.impl.DSL;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.OffsetDateTime;
@@ -22,10 +21,10 @@ import static org.jooq.impl.DSL.defaultValue;
 @Component
 public class TreeTestQueries {
 
-    private final DSLContext dsl;
+    private final JooqTransaction jooqTx;
 
     public Mono<TreeDto> create(ObjectType objectType, Ltree path, UUID userId) {
-        return Mono.from( dsl.insertInto( TREE )
+        return jooqTx.transact(dsl -> dsl.insertInto( TREE )
                 .set( TREE.OBJECT_ID, defaultValue( UUID.class ) )
                 .set( TREE.OBJECT_TYPE, objectType )
                 .set( TREE.PATH, path )
@@ -37,7 +36,7 @@ public class TreeTestQueries {
     }
 
     public Mono<TreeDto> update(TreeDto dto) {
-        return Mono.from( dsl.update( TREE )
+        return jooqTx.transact(dsl -> dsl.update( TREE )
                 .set( TREE.OBJECT_TYPE, dto.getObjectType() )
                 .set( TREE.PATH, dto.getPath() )
                 .set( TREE.USER_ID, dto.getUserId())
@@ -49,7 +48,7 @@ public class TreeTestQueries {
     }
 
     public List<TreeDto> getAllUserObjects(UUID userId) {
-        return Flux.from( dsl.selectFrom( TREE )
+        return jooqTx.transactMany(dsl -> dsl.selectFrom( TREE )
                         .where( TREE.USER_ID.eq( userId ) )
                         .orderBy( TREE.OBJECT_ID.asc() ) )
                 .map(treeRecord -> treeRecord.into( TreeDto.class) )
@@ -58,14 +57,14 @@ public class TreeTestQueries {
     }
 
     public TreeDto getByObjectId(UUID objectId) {
-        return Mono.from( dsl.selectFrom( TREE )
+        return jooqTx.transact(dsl -> dsl.selectFrom( TREE )
             .where( TREE.OBJECT_ID.eq( objectId ) ) )
             .mapNotNull(treeRecord -> treeRecord.into( TreeDto.class) )
            .block();
     }
 
     public TreeDto getByObjectPath(String pathStr, UUID userId) {
-        return Mono.from(dsl.selectFrom(TREE)
+        return jooqTx.transact(dsl -> dsl.selectFrom(TREE)
                 .where(TREE.USER_ID.eq(userId)
                         .and( TREE.PATH.eq(Ltree.valueOf( pathStr )))))
                 .map(treeRecord -> treeRecord.into( TreeDto.class) )

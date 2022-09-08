@@ -9,15 +9,10 @@ import com.ericgha.docuCloud.repository.testtool.tree.TestFileTreeFactory;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnablePostgresTestContainer;
 import com.ericgha.docuCloud.util.comparator.TreeDtoComparators;
 import org.jooq.DSLContext;
-import org.jooq.Publisher;
 import org.jooq.Record1;
 import org.jooq.Record3;
 import org.jooq.Record6;
 import org.jooq.Select;
-import org.jooq.SelectConditionStep;
-import org.jooq.SelectQuery;
-import org.jooq.SelectWhereStep;
-import org.jooq.impl.DSL;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -48,7 +43,6 @@ import java.util.stream.Stream;
 import static com.ericgha.docuCloud.jooq.Tables.TREE;
 import static com.ericgha.docuCloud.repository.testtool.assertion.TestFileTreeAssertion.assertNoChanges;
 import static com.ericgha.docuCloud.repository.testtool.assertion.TestFileTreeAssertion.assertNoChangesFor;
-import static org.jooq.impl.DSL.asterisk;
 import static org.jooq.impl.DSL.currentOffsetDateTime;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -126,7 +120,7 @@ class TreeRepositoryIntTest {
     }
 
     @Test
-    @DisplayName("Creates the expected record")
+    @DisplayName("create Creates the expected record")
     void create() {
         TreeDto record = new TreeDto( null, ObjectType.ROOT,
                 Ltree.valueOf( "" ), null, null );
@@ -382,7 +376,7 @@ class TreeRepositoryIntTest {
         String destStr = "dir0.file100";
         TreeDto srcRecord = tree0.getOrigRecord( srcStr );
         var record = Mono.from(
-                treeRepository.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord, user0, dsl ) )
+                        treeRepository.fetchFileCopyRecords( Ltree.valueOf( destStr ), srcRecord, user0, dsl ) )
                 .block();
 
         assertEquals( srcRecord.getObjectId(), record.get( "source_id" ) );
@@ -537,7 +531,7 @@ class TreeRepositoryIntTest {
 
     @ParameterizedTest(name = "rmNormal deletes record and returns object_id - {index} : {0}")
     @ValueSource(strings = {"dir0.dir1.dir2", "file0"})
-    void rmNormalDeletesRecordAndReturnsObjectId(String toDelete) {
+    void rmNormalDeletesRecordAndReturnsObjectId(String toDelete ) {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
         TreeDto recToDelete = tree0.getOrigRecord( toDelete );
@@ -551,7 +545,6 @@ class TreeRepositoryIntTest {
                 .stream()
                 .filter( r -> !r.equals( recToDelete ) ).toList();
         assertIterableEquals( expected, found );
-
         assertNoChanges( tree1 );
     }
 
@@ -641,24 +634,16 @@ class TreeRepositoryIntTest {
         // testing path & objectId containing queries
         TreeDto parent = tree1.getOrigRecord( "" ); // notice tree1
         StepVerifier.create( treeRepository.ls( parent, user0 ) )
-                .expectNextCount(0).verifyComplete();
+                .expectNextCount( 0 ).verifyComplete();
     }
 
     @Test
-    @DisplayName( "ls returns only parent if parent is a file" )
+    @DisplayName("ls returns only parent if parent is a file")
     void lsReturnsParentWhenParentIsFile() {
         TestFileTree tree0 = treeFactory.constructDefault( user0 );
         // selectivity challenge
         TestFileTree tree1 = treeFactory.constructDefault( user1 );
         TreeDto source = tree0.getOrigRecord( "file0" );
-        treeRepository.ls(source, user0 ).as(StepVerifier::create).expectNext(source).verifyComplete();
-    }
-
-    @Test
-    // Todo delete me
-    void test() {
-        TestFileTree tree0 = treeFactory.constructDefault( user0 );
-        SelectConditionStep<TreeRecord> q = dsl.selectFrom( TREE ).where(TREE.USER_ID.eq(user0.getUserId() ) );
-        Mono.from( q ).block();
+        treeRepository.ls( source, user0 ).as( StepVerifier::create ).expectNext( source ).verifyComplete();
     }
 }

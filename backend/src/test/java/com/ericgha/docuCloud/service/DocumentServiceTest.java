@@ -42,6 +42,9 @@ public class DocumentServiceTest {
     @MockBean
     DSLContext dslContextMock;
 
+    @MockBean
+    JooqTransaction jooqTxMock;
+
     @Autowired
     DocumentService documentService;
 

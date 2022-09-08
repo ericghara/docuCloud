@@ -6,6 +6,7 @@ import com.ericgha.docuCloud.jooq.enums.ObjectType;
 import com.ericgha.docuCloud.repository.TreeRepository;
 import lombok.Getter;
 import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.springframework.lang.Nullable;
 
@@ -25,6 +26,7 @@ import java.util.UUID;
  * referencing the {@code Ltree} or path {@code String} this is for convenience, the {@code ObjectId}
  * is used internally to connect original and current objects.
  **/
+@Slf4j
 public class TestFileTree {
 
     private final Map<Ltree, TreeDto> dtoByPath;

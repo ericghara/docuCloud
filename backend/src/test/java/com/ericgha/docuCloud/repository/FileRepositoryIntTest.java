@@ -300,7 +300,7 @@ class FileRepositoryIntTest {
                 """;
         UUID sourceId = tree0.getOrigRecord("fileObj0").getObjectId();
         UUID destId = tree0.getOrigRecord("dir0.fileObj3").getObjectId();
-        StepVerifier.create( fileRepository.cpAllFiles( sourceId, destId, user0, dsl) )
+        StepVerifier.create( fileRepository.cpAllFiles( sourceId, destId, user0) )
                 .expectNext( 2L )
                 .verifyComplete();
         TestFileAssertion.assertRepositoryState( files0, expectedState );
@@ -366,7 +366,7 @@ class FileRepositoryIntTest {
     @Test
     @DisplayName( "deleteMe" )
     // todo delete me
-    void deleteMe(@Autowired TreeRepository treeRepository) {
+    void deleteMe(@Autowired TreeRepository treeRepository, @Autowired TransactionalOperator txrx) {
         files0.insertFileViewRecord( "fileObj2", "fileRes0" );
         /* Current state:
             fileObj0, fileRes0
@@ -383,9 +383,9 @@ class FileRepositoryIntTest {
         TreeDto fileObj2 = tree0.getOrigRecord( "fileObj2" );
         UUID fileRes0Id = files0.getOrigFileFor( "fileRes0" ).getFileId();
         UUID fileRes1Id = files0.getOrigFileFor( "fileRes1" ).getFileId();
-        Flux<Record2<UUID,Boolean>> deleted = Flux.from(dsl.transactionPublisher(trx ->
+        Flux<Record2<UUID,Boolean>> deleted =
                 treeRepository.rmNormal(fileObj2, user0 )
-                        .flatMapMany( treeDto ->  fileRepository.rmEdgesFrom( treeDto.getObjectId(), user0 ) ) ) );
+                        .flatMapMany( treeDto ->  fileRepository.rmEdgesFrom( treeDto.getObjectId(), user0 ) ).as(txrx::transactional);
         Map<UUID, Boolean> expected = Map.of( fileRes0Id, false, fileRes1Id, true );
         assertNotNull( tree0.fetchCurRecord( fileObj2 ) );
         StepVerifier.create( deleted )

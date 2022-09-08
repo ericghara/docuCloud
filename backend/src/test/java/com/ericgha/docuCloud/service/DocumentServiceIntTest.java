@@ -11,7 +11,6 @@ import com.ericgha.docuCloud.repository.testtool.file.RandomFileGenerator;
 import com.ericgha.docuCloud.repository.testtool.file.RandomFileGenerator.FileDtoAndData;
 import com.ericgha.docuCloud.testconainer.EnableMinioTestContainerContextCustomizerFactory.EnableMinioTestContainer;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnablePostgresTestContainer;
-import org.jooq.DSLContext;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,7 +18,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 
 import java.io.IOException;
@@ -45,7 +46,7 @@ public class DocumentServiceIntTest {
     private S3FileStore s3FileStore;
 
     @Autowired
-    private DSLContext dsl;
+    private JooqTransaction jooqTx;
 
     @Autowired
     private TreeRepository treeRepository;
@@ -75,13 +76,15 @@ public class DocumentServiceIntTest {
                 .toURI() );
         String sql = Files.readString( schemaFile );
         // delete and rebuild tables
-        Mono.from( dsl.query( sql ) ).block();
+        jooqTx.transact(dsl -> dsl.query( sql ) ).publishOn( Schedulers.boundedElastic()).block();
         // create a root dir for user0
         treeRepository.create(
                 TreeDto.builder().objectType( ROOT )
                         .path( Ltree.valueOf( "" ) )
                         .build(),
-                user0 ).block();
+                user0 )
+                .publishOn( Schedulers.boundedElastic())
+                .block();
     }
 
     /*
@@ -138,6 +141,22 @@ public class DocumentServiceIntTest {
     }
 
     @Test
+    @DisplayName("Create dir2 returns treeDto")
+    void createDir2ReturnsTreeDto() {
+        TreeDto dir0 = TreeDto.builder()
+                .path( Ltree.valueOf( "dir0" ) )
+                .objectType( DIR )
+                .build();
+        StepVerifier.create( documentService.createDir2( dir0, user0 ) )
+                .assertNext( created -> {
+                    assertEquals( dir0.getPathStr(), created.getPathStr() );
+                    assertEquals( dir0.getObjectType(), created.getObjectType() );
+                    assertEquals( user0.getUserId(), created.getUserId() );
+                } )
+                .verifyComplete();
+    }
+
+    @Test
     @DisplayName("createDir throws Insertion error when failure to insert")
     void createDirThrows() {
         TreeDto dir0 = TreeDto.builder()
@@ -179,7 +198,7 @@ public class DocumentServiceIntTest {
 
     @Test
     @DisplayName("addFileVersion returns TreeAndFileView on successful PUT")
-    void addFileVersionReturnsTreeAndFileView() {
+    void addFileVersionReturnsTreeAndFileView(@Autowired TransactionalOperator txop) {
         TreeDto fileObj0 = TreeDto.builder().path( Ltree.valueOf( "file0" ) )
                 .objectType( FILE )
                 .build();
@@ -187,6 +206,7 @@ public class DocumentServiceIntTest {
         FileDtoAndData fileAndData1 = randomFileGenerator.generate();
         // create the file
         Mono<TreeAndFileView> insertReq = documentService.createFile( fileObj0, fileAndData0.fileDto(), fileAndData0.data(), user0 )
+                .as(txop::transactional)
                 .map( TreeAndFileView::treeDto )
                 .flatMap( fullTreeDto -> documentService.addFileVersion( fullTreeDto, fileAndData1.fileDto(), fileAndData1.data(), user0 ) );
         StepVerifier.create( insertReq )
@@ -203,7 +223,7 @@ public class DocumentServiceIntTest {
         FileDto fileDto = randomFileGenerator.generate().fileDto();
         var insert = documentService.test( fileObj0, fileDto, user0 );
         insert.as( StepVerifier::create ).expectNextCount( 1 ).verifyComplete();
-        treeRepository.ls( fileObj0, user0 ).map( newFile -> fileRepository.lsNewestFileFor( newFile , user0, dsl ) )
+        treeRepository.ls( fileObj0, user0 ).map( newFile -> fileRepository.lsNewestFileFor( newFile , user0 ) )
                 .as( StepVerifier::create ).expectNextCount( 1 ).verifyComplete();
         System.out.println( "sdfsd" );
     }

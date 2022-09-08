@@ -9,6 +9,7 @@ import com.ericgha.docuCloud.jooq.tables.records.TreeRecord;
 import com.ericgha.docuCloud.service.JooqTransaction;
 import com.ericgha.docuCloud.util.validator.TreeDtoValidator;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import org.jooq.CommonTableExpression;
 import org.jooq.DSLContext;
 import org.jooq.Record1;
@@ -18,10 +19,10 @@ import org.jooq.Record6;
 import org.jooq.ResultQuery;
 import org.jooq.SelectConditionStep;
 import org.jooq.SelectJoinStep;
+import org.jooq.impl.DSL;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.reactivestreams.Publisher;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -37,7 +38,6 @@ import static org.jooq.impl.DSL.*;
 
 @Repository
 @RequiredArgsConstructor
-@Transactional
 public class TreeRepository {
 
     // TODO lsDir(Ltree path, CloudUser clouduser)
@@ -45,6 +45,7 @@ public class TreeRepository {
 
 
     // required treeDto fields: objectType, path
+    
     public Mono<TreeDto> create(TreeDto treeDto, CloudUser cloudUser) {
         return jooqTx.transact( dsl -> dsl.insertInto( TREE )
                         .set( TREE.OBJECT_ID, UUID.randomUUID() )
@@ -56,7 +57,7 @@ public class TreeRepository {
                 .map( treeRecord -> treeRecord.into( TreeDto.class ) );
     }
 
-
+    
     public Mono<Long> mvFile(TreeDto source, Ltree destination, CloudUser cloudUser) {
         if (source.getObjectType() != FILE) {
             return Mono.empty();
@@ -71,7 +72,7 @@ public class TreeRepository {
                 .map( (Number o) -> o.longValue() );
     }
 
-
+    
     public Mono<Long> mvDir(TreeDto source, Ltree destination, CloudUser cloudUser) throws IllegalObjectTypeException {
         TreeDtoValidator.mustBeObjectType( source, DIR );
         return jooqTx.transact( dsl -> {
@@ -87,7 +88,7 @@ public class TreeRepository {
                 .map( (Number o) -> o.longValue() );
     }
 
-
+    
     public Flux<TreeDto> rmDirRecursive(TreeDto record, CloudUser cloudUser) throws IllegalObjectTypeException {
         TreeDtoValidator.mustBeObjectType( record, DIR );
         return jooqTx.transactMany( dsl -> {
@@ -100,6 +101,7 @@ public class TreeRepository {
                 .map( TreeDto::fromRecord );
     }
 
+    
     public Mono<TreeDto> rmNormal(TreeDto record, CloudUser cloudUser) {
         return jooqTx.transact( dsl -> {
                     // Doesn't perform internal check of proper objectType as a creating a subtree from a spoofed file is not expensive
@@ -113,6 +115,7 @@ public class TreeRepository {
     }
 
     // returning source_id, destination_id, object_type
+    
     public Flux<Record3<UUID, UUID, ObjectType>> cpDir(TreeDto source, Ltree destination, CloudUser cloudUser) {
         TreeDtoValidator.mustBeObjectType( source, DIR );
         return jooqTx.transactMany( dsl -> {
@@ -123,6 +126,7 @@ public class TreeRepository {
 
 
     // Returning ObjectType is a compromise for code usability with cpDir, it will of course always be ObjectType.FILE
+    
     public Mono<Record3<UUID, UUID, ObjectType>> cpFile(TreeDto source, Ltree destination, CloudUser cloudUser) {
         TreeDtoValidator.mustBeObjectType( source, FILE );
         return jooqTx.transact( dsl -> {
@@ -145,24 +149,25 @@ public class TreeRepository {
      * @return records (if any) ordered by path ascending.  Source, if found, is guaranteed to be the first record
      * returned.  If source is NOT found will always return null set.
      */
+    @SneakyThrows
     public Flux<TreeDto> ls(TreeDto source, CloudUser cloudUser) {
-        return jooqTx.transactMany( dsl -> {
-                    CommonTableExpression<TreeRecord> parent = name( "parent" ).as(
-                            this.flexibleSelect( source, cloudUser, dsl ) );
-                    return dsl.with( parent )
-                            .select( TREE.asterisk() )
-                            .from( TREE, parent )
-                            .where( ltreeIsparent( parent.field( TREE.PATH ), TREE.PATH ) )
-                            .and( nlevel( TREE.PATH ).le( nlevel( parent.field( TREE.PATH ) ).plus( 1 ) ) )
-                            .and( TREE.USER_ID.eq( cloudUser.getUserId() ) )
-                            .orderBy( TREE.PATH.asc() )
-                            .coerce( TREE );
-                } )
+        CommonTableExpression<TreeRecord> parent = name( "parent" ).as(
+                this.flexibleSelect( source, cloudUser ) );
+        return jooqTx.transactMany( dsl ->
+                        dsl.with( parent )
+                                .select( TREE.asterisk() )
+                                .from( TREE, parent )
+                                .where( ltreeIsparent( parent.field( TREE.PATH ), TREE.PATH ) )
+                                .and( nlevel( TREE.PATH ).le( nlevel( parent.field( TREE.PATH ) ).plus( 1 ) ) )
+                                .and( TREE.USER_ID.eq( cloudUser.getUserId() ) )
+                                .orderBy( TREE.PATH.asc() )
+                                .coerce( TREE )
+                )
                 .map( TreeDto::fromRecord );
     }
 
     // Query designed such that one or both of Object_id and path are used, therefore one of these fields may be null
-    ResultQuery<TreeRecord> flexibleSelect(TreeDto treeDto, CloudUser cloudUser, DSLContext dsl) {
+    ResultQuery<TreeRecord> flexibleSelect(TreeDto treeDto, CloudUser cloudUser) {
         UUID objectId = treeDto.getObjectId();
         Ltree path = treeDto.getPath();
         if (Objects.isNull( objectId ) && Objects.isNull( path )) {
@@ -175,7 +180,7 @@ public class TreeRepository {
         if (Objects.nonNull( path )) {
             conditions = conditions.and( val( path ).eq( TREE.PATH ) );
         }
-        return dsl.select( asterisk() )
+        return DSL.select( asterisk() )
                 .from( TREE ).where( conditions ).limit( 1 )
                 .coerce( TREE );
     }
@@ -293,6 +298,6 @@ public class TreeRepository {
 
     //todo delete me
     SelectConditionStep<TreeRecord> selectAll(CloudUser cloudUser, DSLContext dsl) {
-        return dsl.selectFrom( TREE ).where( TREE.USER_ID.eq(cloudUser.getUserId() ) );
+        return dsl.selectFrom( TREE ).where( TREE.USER_ID.eq( cloudUser.getUserId() ) );
     }
 }

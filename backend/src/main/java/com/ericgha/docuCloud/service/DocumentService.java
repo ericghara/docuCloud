@@ -19,22 +19,18 @@ import com.ericgha.docuCloud.util.validator.TreeDtoValidator;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jooq.Configuration;
 import org.jooq.DSLContext;
 import org.jooq.Record3;
 import org.jooq.postgres.extensions.types.Ltree;
-import org.reactivestreams.Publisher;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static com.ericgha.docuCloud.jooq.enums.ObjectType.*;
@@ -42,7 +38,6 @@ import static com.ericgha.docuCloud.jooq.tables.Tree.TREE;
 
 @Service
 @Profile("(test & s3) | !test")
-@Transactional
 @RequiredArgsConstructor
 @Slf4j
 public class DocumentService {
@@ -51,7 +46,7 @@ public class DocumentService {
     private final FileRepository fileRepository;
     private final TreeRepository treeRepository;
     private final DSLContext dsl; // todo remove
-    private final JooqTransaction trxDslPublisher;
+    private final JooqTransaction jooqTx;
 
     private final Converter<FileViewDto, FileDto> fileViewToFile;
 
@@ -68,28 +63,24 @@ public class DocumentService {
      * never happen).
      * @throws RecordNotFoundException if the source record could not be located
      */
+    
     public Flux<TreeAndFileView> ls(TreeDto source, CloudUser cloudUser)
             throws IllegalObjectTypeException, RecordNotFoundException {
-        Function<Configuration, Publisher<TreeAndFileView>> lsTrans = trx -> {
             Flux<TreeDto> hotStream = treeRepository.ls( source, cloudUser ).cache( 0 );
             Mono<Void> takeParent = this.firstMustBeRootOrFile( hotStream );
-            Flux<TreeAndFileView> dirsAndFiles = this.zipWithFileViewDtos( hotStream, cloudUser, trx.dsl() );
+            Flux<TreeAndFileView> dirsAndFiles = this.zipWithFileViewDtos( hotStream, cloudUser);
             return takeParent.thenMany( dirsAndFiles );
-        };
-        return Flux.from( this.transact( lsTrans ) );
     }
 
+    
     public Mono<SeekInitResponse> fetchFirstPageFileVersions(TreeDto treeDto, int limit, CloudUser cloudUser) {
-        Function<Configuration, Publisher<SeekInitResponse>> seekTrans = trx -> {
             var count = fileRepository.countFilesFor( treeDto, cloudUser );
             var fileList = fileRepository.lsNewestFilesFor( treeDto, limit, cloudUser )
                     .mapNotNull(fileViewToFile::convert);
             return Mono.just(new SeekInitResponse( fileList, count ) );
-        };
-        // todo perhaps make mono sink that only emits complete when count and fileList have completed
-        return Mono.from(this.transact(seekTrans ) );
     }
 
+    
     public Flux<FileViewDto> fetchNextPage(FileViewDto lastFileView, int limit, CloudUser cloudUser) {
         return fileRepository.lsNextFilesFor( lastFileView, limit, cloudUser );
     }
@@ -108,19 +99,17 @@ public class DocumentService {
 //        return trxDslPublisher.transact( rmTrans );
 //    }
 
+    
     public Mono<Void> rmVersion(TreeDto treeDto, FileDto fileDto, CloudUser cloudUser) {
         TreeJoinFileDto record = TreeJoinFileDto.builder().objectId( treeDto.getObjectId() )
                 .fileId( fileDto.getFileId() )
                 .build();
-        Function<Configuration, Publisher<Void>> rmTrans = trx -> {
-            Flux<UUID> versionsToDelete = PublisherUtil.requireNext( fileRepository.rmEdge( record, cloudUser ),
+        Flux<UUID> versionsToDelete = PublisherUtil.requireNext( fileRepository.rmEdge( record, cloudUser ),
                             e -> new DeleteFailureException( "FileRepository", e) )
                     .filter( record2 -> record2.get( "orphan", Boolean.class ) )
                     .map( record2 -> record2.get( "file_id", UUID.class ) )
                     .flux();
-            return fileStore.deleteFiles( versionsToDelete, cloudUser );
-        };
-        return Mono.from( this.transact( rmTrans ) );
+        return fileStore.deleteFiles( versionsToDelete, cloudUser );
     }
 
     /**
@@ -135,13 +124,14 @@ public class DocumentService {
      * @throws IllegalObjectTypeException if the treeDto objectType is FILE
      * @throws InsertFailureException     if no records are inserted into either the Tree or File tables
      */
+    
     public Mono<TreeAndFileView> createFile(@NonNull TreeDto treeDto,
                                  @NonNull FileDto fileDto,
                                  @NonNull Flux<ByteBuffer> data,
                                  @NonNull CloudUser cloudUser) throws IllegalObjectTypeException, InsertFailureException {
         TreeDtoValidator.mustBeObjectType( treeDto, FILE );
-        Function<Configuration, Publisher<TreeAndFileView>> createTrans = trx ->
-                PublisherUtil.requireNext(
+
+        return PublisherUtil.requireNext(
                                 treeRepository.create( treeDto, cloudUser ),
                                 e -> new InsertFailureException( "TreeRepository", e) )
                         .zipWhen(fullTreeDto ->
@@ -150,32 +140,39 @@ public class DocumentService {
                                                 e -> new InsertFailureException( "FileRepository", e) ),
                                 TreeAndFileView::new)
                         .flatMap( treeAndFileView -> this.putDocumentIfFile( treeAndFileView, data, cloudUser ) );
-        return Mono.from( this.transact( createTrans ) );
     }
 
     // todo delete me
+    
     public Mono<TreeAndFileView> test(TreeDto treeDto, FileDto fileDto, CloudUser cloudUser) {
-        return trxDslPublisher.get().flatMap( trxDsl -> treeRepository.create( treeDto, cloudUser ) )
-            .zipWhen(newTreeDto -> trxDslPublisher.get().flatMap( trxDsl -> fileRepository.createFileFor( newTreeDto, fileDto, cloudUser ) ) )
+        return treeRepository.create( treeDto, cloudUser )
+            .zipWhen(newTreeDto -> fileRepository.createFileFor( newTreeDto, fileDto, cloudUser ) )
                 .map(tup2 -> new TreeAndFileView(tup2.getT1(), tup2.getT2() ) );
+    }
+
+    // todo delete me
+    
+    public Mono<TreeDto> createDir2(TreeDto treeDto, CloudUser cloudUser) throws NullPointerException, IllegalArgumentException {
+        TreeDtoValidator.mustBeObjectType( treeDto, DIR );
+        return PublisherUtil.requireNext(treeRepository.create( treeDto, cloudUser ),
+                e -> new InsertFailureException("TreeRepository - DIR", e) );
     }
 
     // The only Information used from treeDto is objectId.  The only
     // information used from fileDto is checksum and size
+    
     public Mono<TreeAndFileView> addFileVersion(@NonNull TreeDto treeDto,
                                      @NonNull FileDto fileDto,
                                      @NonNull Flux<ByteBuffer> data,
                                      @NonNull CloudUser cloudUser) throws InsertFailureException, IllegalObjectTypeException {
         TreeDtoValidator.mustBeObjectType( treeDto, FILE );
-        Function<Configuration, Publisher<TreeAndFileView>> createTrans = trx ->
-                PublisherUtil.requireNext(
+        return PublisherUtil.requireNext(
                                 fileRepository.createFileFor( treeDto, fileDto, cloudUser ),
                                 e -> new InsertFailureException( "FileRepository", e) )
                         .map(fileViewDto -> new TreeAndFileView( treeDto, fileViewDto ) )
                         .flatMap( treeAndFileView -> this.putDocumentIfFile( treeAndFileView, data, cloudUser ) );
-        return Mono.from( this.transact( createTrans ) );
     }
-
+    
     public Mono<TreeDto> createDir(TreeDto treeDto, CloudUser cloudUser) throws NullPointerException, IllegalArgumentException {
         TreeDtoValidator.mustBeObjectType( treeDto, DIR );
         return PublisherUtil.requireNext(treeRepository.create( treeDto, cloudUser ),
@@ -190,6 +187,7 @@ public class DocumentService {
                 e -> new InsertFailureException("TreeRepository - ROOT", e) );
     }
 
+    
     public Mono<Long> mv(TreeDto source, Ltree destination, CloudUser cloudUser) {
         var objectType = TreeDtoValidator.getOrThrow( source.getObjectType(), "objectType" );
         if (objectType == FILE) {
@@ -201,25 +199,20 @@ public class DocumentService {
         }
     }
 
+    
     public Mono<Void> cp(TreeDto source, Ltree destination, boolean onlyNewestVer, CloudUser cloudUser) {
-        Function<Configuration, Publisher<Void>> cpTrans = trx ->
-                this.cpTreeOperations( source, destination, cloudUser, trx.dsl() )
-                        .flatMap( record3 -> this.cpFileOperations( record3, onlyNewestVer, cloudUser, trx.dsl() ) )
+        return this.cpTreeOperations( source, destination, cloudUser )
+                        .flatMap( record3 -> this.cpFileOperations( record3, onlyNewestVer, cloudUser ) )
                         // Error if any file copies return 0 inserts
                         .filter( l -> l == 0 )
                         .doOnNext( l -> {
                             throw new IllegalStateException( "Failed to copy a file" );
                         } )
                         .then();
-        return Mono.from( this.transact( cpTrans ) );
-    }
-
-    private <T> Publisher<T> transact(@NonNull Function<Configuration, Publisher<T>> func) {
-        return dsl.transactionPublisher( func::apply );
     }
 
     private Flux<Record3<UUID, UUID, ObjectType>> cpTreeOperations(TreeDto source, Ltree destination,
-                                                                   CloudUser cloudUser, DSLContext trxDsl) {
+                                                                   CloudUser cloudUser) {
         var objectType = TreeDtoValidator.getOrThrow( source.getObjectType(), "objectType" );
         Flux<Record3<UUID, UUID, ObjectType>> copied;
         if (objectType == FILE) {
@@ -235,13 +228,13 @@ public class DocumentService {
     // record3 probably should have a dto...
     // source_id, object_id, objectType (should only receive file objectTypes)
     private Mono<Long> cpFileOperations(Record3<UUID, UUID, ObjectType> record3, boolean onlyNewestVer,
-                                        CloudUser cloudUser, DSLContext trxDsl) {
+                                        CloudUser cloudUser) {
         var sourceId = record3.get( "source_id", UUID.class );
         var destId = record3.get( TREE.OBJECT_ID );
         if (onlyNewestVer) {
             return fileRepository.cpNewestFile( sourceId, destId, cloudUser );
         }
-        return fileRepository.cpAllFiles( sourceId, destId, cloudUser, trxDsl );
+        return fileRepository.cpAllFiles( sourceId, destId, cloudUser);
     }
 
     /**
@@ -276,13 +269,13 @@ public class DocumentService {
      * @param trxDsl
      * @return
      */
-    private Flux<TreeAndFileView> zipWithFileViewDtos(Flux<TreeDto> flux, CloudUser cloudUser, DSLContext trxDsl) {
+    private Flux<TreeAndFileView> zipWithFileViewDtos(Flux<TreeDto> flux, CloudUser cloudUser) {
         return flux.flatMap( treeDto -> {
             ObjectType objectType = TreeDtoValidator.mustBeOneOfObjectTypes( treeDto, FILE, DIR );
             if (objectType == DIR) {
                 return Mono.just( new TreeAndFileView( treeDto, null ) );
             } else {
-                return fileRepository.lsNewestFileFor( treeDto, cloudUser, trxDsl )
+                return fileRepository.lsNewestFileFor( treeDto, cloudUser)
                         .map( fileViewDto -> new TreeAndFileView( treeDto, fileViewDto ) )
                         // while uncommon a fileObject without any files is possible
                         .switchIfEmpty( Mono.just( new TreeAndFileView( treeDto, null ) ) );

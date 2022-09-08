@@ -8,12 +8,10 @@ import com.ericgha.docuCloud.dto.TreeJoinFileDto;
 import com.ericgha.docuCloud.jooq.tables.records.FileViewRecord;
 import com.ericgha.docuCloud.service.JooqTransaction;
 import lombok.RequiredArgsConstructor;
-import org.jooq.DSLContext;
 import org.jooq.Record1;
 import org.jooq.Record2;
 import org.jooq.ResultQuery;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -26,7 +24,7 @@ import static org.jooq.impl.DSL.*;
 
 @Repository
 @RequiredArgsConstructor
-@Transactional
+
 public class FileRepository {
 
     private final JooqTransaction jooqTx;
@@ -86,7 +84,7 @@ public class FileRepository {
         return newestFile.flatMap( query -> this.cpCommon( destinationObjectId, query ) );
     }
 
-    public Mono<Long> cpAllFiles(UUID sourceObjectId, UUID destinationObjectId, CloudUser cloudUser, DSLContext dsl) {
+    public Mono<Long> cpAllFiles(UUID sourceObjectId, UUID destinationObjectId, CloudUser cloudUser) {
         Mono<ResultQuery<FileViewRecord>> allFiles = this.selectAllFilesLinkedTo( sourceObjectId, cloudUser );
         return allFiles.flatMap(query -> this.cpCommon( destinationObjectId, query ) );
     }
@@ -108,7 +106,7 @@ public class FileRepository {
                 .map( Record1::value1 );
     }
 
-    public Mono<FileViewDto> lsNewestFileFor(TreeDto treeDto, CloudUser cloudUser, DSLContext dsl) {
+    public Mono<FileViewDto> lsNewestFileFor(TreeDto treeDto, CloudUser cloudUser) {
         return lsNewestFilesFor( treeDto, 1, cloudUser )
                 .next();
     }

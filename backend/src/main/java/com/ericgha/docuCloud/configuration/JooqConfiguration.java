@@ -12,10 +12,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.jooq.DefaultConfigurationCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.r2dbc.core.DatabaseClient;
+import org.springframework.transaction.ReactiveTransactionManager;
 
 @Configuration
-@EnableTransactionManagement
 @AllArgsConstructor
 public class JooqConfiguration {
 
@@ -40,8 +40,8 @@ public class JooqConfiguration {
     }
 
     @Bean
-    public JooqTransaction dslPublisher() {
-        return new JooqTransaction(cfi, DSL_DIALECT, DSL_SETTINGS);
+    public JooqTransaction dslPublisher(@Autowired DatabaseClient databaseClient, @Autowired ReactiveTransactionManager transactionManager) {
+        return new JooqTransaction(databaseClient, transactionManager, DSL_DIALECT, DSL_SETTINGS);
     }
 
 //    @Bean
