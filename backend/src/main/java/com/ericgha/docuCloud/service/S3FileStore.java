@@ -97,7 +97,7 @@ public class S3FileStore implements FileStore {
     }
 
     @Override
-    public Mono<Void> putFile(Flux<ByteBuffer> data, FileDto fileDto, CloudUser cloudUser) throws RuntimeException {
+    public <T extends FileDto> Mono<Void> putFile(Flux<ByteBuffer> data, T fileDto, CloudUser cloudUser) throws RuntimeException {
         // uses fileId, checksum, size and probably in the future, content type from fileDto
         var request = PutObjectRequest.builder()
                 .bucket( bucketName )
@@ -113,7 +113,7 @@ public class S3FileStore implements FileStore {
     }
 
     @Override
-    public Flux<ByteBuffer> getFile(FileDto fileDto, CloudUser cloudUser) {
+    public <T extends FileDto> Flux<ByteBuffer> getFile(T fileDto, CloudUser cloudUser) {
         var request = GetObjectRequest.builder()
                 .bucket( bucketName )
                 .key( ObjectIdentifierGenerator.generate( fileDto, cloudUser ).key() )

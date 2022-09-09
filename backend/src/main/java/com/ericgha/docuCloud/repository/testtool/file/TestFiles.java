@@ -209,7 +209,7 @@ public class TestFiles {
         TreeDto treeDto = Objects.requireNonNull( tree.getOrigRecord( treePath ), "treePath not found" );
         UUID objectId = treeDto.getObjectId();
         UUID userId = treeDto.getUserId();
-        FileViewDto.FileViewDtoBuilder toCreate = FileViewDto.builder().objectId( objectId )
+        var toCreate = FileViewDto.builder().objectId( objectId )
                 .userId( userId );
         FileViewDto createdRecord;
         if (treeDtoByChecksum.containsKey( checksum )) {

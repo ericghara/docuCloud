@@ -33,7 +33,7 @@ public class FileRepository {
     // TODO ensure each file has object degree >= 1
     // TODO tests of table constraints
 
-    public Mono<Long> createEdge(FileDto fileDto, TreeDto treeDto, CloudUser cloudUser) {
+    public <T extends FileDto> Mono<Long> createEdge(T fileDto, TreeDto treeDto, CloudUser cloudUser) {
         // linking of other user's fileObject or non file objects is prevented by table constraints
         return jooqTx.withConnection( dsl -> dsl.insertInto( FILE_VIEW )
                         .set( FILE_VIEW.OBJECT_ID, treeDto.getObjectId() )
@@ -44,7 +44,7 @@ public class FileRepository {
     }
 
     // fileId, and uploadedAt fields are generated and will be ignored, only fields used are checksum and size
-    public Mono<FileViewDto> createFileFor(TreeDto treeObject, FileDto file, CloudUser cloudUser) {
+    public <T extends FileDto> Mono<FileViewDto> createFileFor(TreeDto treeObject, T file, CloudUser cloudUser) {
         // linking of other user's fileObject or non file objects is prevented by table constraints
         return jooqTx.withConnection( dsl -> dsl.insertInto( FILE_VIEW )
                         .set( FILE_VIEW.OBJECT_ID, treeObject.getObjectId() )

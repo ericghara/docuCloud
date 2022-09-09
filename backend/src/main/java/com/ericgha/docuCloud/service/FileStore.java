@@ -23,9 +23,9 @@ public interface FileStore {
      */
     Mono<Boolean> createBucketIfNotExists() throws RuntimeException;
 
-    Mono<Void> putFile(Flux<ByteBuffer> data, FileDto filDto, CloudUser cloudUser) throws RuntimeException;
+    <T extends FileDto> Mono<Void> putFile(Flux<ByteBuffer> data, T filDto, CloudUser cloudUser) throws RuntimeException;
 
-    Flux<ByteBuffer> getFile(FileDto fileDto, CloudUser cloudUser);
+    <T extends FileDto> Flux<ByteBuffer> getFile(T fileDto, CloudUser cloudUser);
 
     Mono<Void> deleteFiles(Flux<UUID> fileIds, CloudUser cloudUser) throws RuntimeException;
 
