@@ -10,6 +10,7 @@ import org.reactivestreams.Publisher;
 import org.springframework.r2dbc.connection.ConnectionFactoryUtils;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.transaction.ReactiveTransactionManager;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -33,35 +34,59 @@ public class JooqTransaction {
                 .map( c -> DSL.using( c, sqlDialect, dslSettings ) );
     }
 
+    /**
+     * Wrap the provided mono in a transaction managed by
+     * {@link org.springframework.transaction.ReactiveTransactionManager}
+     * @param mono stream to wrap
+     * @return data stream
+     * @param <T> data type
+     */
+    public <T> Mono<T> inTransaction(Mono<T> mono) {
+        return TransactionalOperator.create( transactionManager )
+                .transactional( mono );
+    }
 
-    public <T> Mono<T> transact(@NonNull Function<DSLContext, Publisher<T>> monoFunction) {
-//        var txop = TransactionalOperator.create(transactionManager);
+    /**
+     * Wrap the provided flux in a transaction managed by
+     * {@link org.springframework.transaction.ReactiveTransactionManager}
+     * @param flux stream to wrap
+     * @return data stream
+     * @param <T> data type
+     */
+    public <T> Flux<T> inTransaction(Flux<T> flux) {
+        return TransactionalOperator.create( transactionManager )
+                .transactional( flux );
+    }
+
+
+    /**
+     * Provides a transaction aware connection to a query.  Does not itself make the query
+     * transactional.  Currently, {@link JooqTransaction#inTransaction} is the way to do that. Spring declarative
+     * transactions are buggy (unknown reason) with this approach and should be avoided.
+     * @param monoFunction with DSLContext as an argument returning a mono
+     * @return data stream
+     * @param <T> Data type of mono
+     */
+    public <T> Mono<T> withConnection(@NonNull Function<DSLContext, Publisher<T>> monoFunction) {
         return databaseClient.inConnection( conn -> {
             var trxDsl = DSL.using( conn );
-            return Mono.from( monoFunction.apply( trxDsl ) )
-                    .doOnCancel( () -> Mono.from( conn.commitTransaction() )
-                            .subscribeOn( Schedulers.boundedElastic() )
-                            .subscribe() )
-                    .doOnError( e -> Mono.from( conn.rollbackTransaction() )
-                            .subscribeOn( Schedulers.boundedElastic() )
-                            .subscribe() );
-//                    .as(txop::transactional);
+            return Mono.from( monoFunction.apply( trxDsl ) );
         } );
     }
 
 
-    public <T> Flux<T> transactMany(@NonNull Function<DSLContext, Publisher<T>> fluxFunction) {
-//        var txop = TransactionalOperator.create(transactionManager);
+    /**
+     * Provides a transaction aware connection to a query.  Does not itself make the query
+     * transactional.  Currently, {@link JooqTransaction#inTransaction} is the way to do that. Spring declarative
+     * transactions are buggy (unknown reason) with this approach and should be avoided.
+     * @param fluxFunction with DSLContext as an argument returning a flux
+     * @return data stream
+     * @param <T> Data type of flux
+     */
+    public <T> Flux<T> withConnectionMany(@NonNull Function<DSLContext, Publisher<T>> fluxFunction) {
         return databaseClient.inConnectionMany( conn -> {
             var trxDsl = DSL.using( conn, sqlDialect, dslSettings );
-            return Flux.from( fluxFunction.apply( trxDsl ) )
-                    .doOnCancel( () -> Mono.from( conn.commitTransaction() )
-                            .subscribeOn( Schedulers.boundedElastic() )
-                            .subscribe() )
-                    .doOnError( e -> Mono.from( conn.rollbackTransaction() )
-                            .subscribeOn( Schedulers.boundedElastic() )
-                            .subscribe() );
-//                    .as(txop::transactional);
+            return Flux.from( fluxFunction.apply( trxDsl ) );
         } );
     }
 }

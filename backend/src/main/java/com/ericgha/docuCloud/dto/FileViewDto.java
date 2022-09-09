@@ -19,26 +19,28 @@ import java.util.UUID;
 @Getter
 @EqualsAndHashCode
 @ToString
-public final class FileViewDto implements Serializable, Comparable<FileViewDto>{
+public final class FileViewDto  extends FileDto implements Serializable, Comparable<FileViewDto> {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
     private final UUID objectId;
-    private final UUID fileId;
-    private final UUID userId;
-    private final OffsetDateTime uploadedAt;
     private final OffsetDateTime linkedAt;
-    private final String checksum;
-    private final Long size;
+
+    public FileViewDto(UUID fileId, String checksum, Long size, UUID userId, OffsetDateTime uploadedAt, UUID objectId, OffsetDateTime linkedAt) {
+        super( fileId, checksum, size, userId, uploadedAt );
+        this.objectId = objectId;
+        this.linkedAt = linkedAt;
+    }
+
     public FileViewRecord intoRecord() {
         return new FileViewRecord().setObjectId( objectId )
-                .setFileId( fileId )
-                .setUserId( userId )
-                .setUploadedAt( uploadedAt )
+                .setFileId( super.getFileId() )
+                .setUserId( super.getUserId() )
+                .setUploadedAt( super.getUploadedAt() )
                 .setLinkedAt( linkedAt )
-                .setChecksum( checksum )
-                .setSize( size );
+                .setChecksum( super.getChecksum() )
+                .setSize( super.getSize() );
     }
 
     public static FileViewDto fromRecord(@NonNull FileViewRecord fileViewRecord) {

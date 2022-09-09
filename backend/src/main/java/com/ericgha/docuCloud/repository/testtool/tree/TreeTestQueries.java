@@ -24,7 +24,7 @@ public class TreeTestQueries {
     private final JooqTransaction jooqTx;
 
     public Mono<TreeDto> create(ObjectType objectType, Ltree path, UUID userId) {
-        return jooqTx.transact(dsl -> dsl.insertInto( TREE )
+        return jooqTx.withConnection( dsl -> dsl.insertInto( TREE )
                 .set( TREE.OBJECT_ID, defaultValue( UUID.class ) )
                 .set( TREE.OBJECT_TYPE, objectType )
                 .set( TREE.PATH, path )
@@ -36,7 +36,7 @@ public class TreeTestQueries {
     }
 
     public Mono<TreeDto> update(TreeDto dto) {
-        return jooqTx.transact(dsl -> dsl.update( TREE )
+        return jooqTx.withConnection( dsl -> dsl.update( TREE )
                 .set( TREE.OBJECT_TYPE, dto.getObjectType() )
                 .set( TREE.PATH, dto.getPath() )
                 .set( TREE.USER_ID, dto.getUserId())
@@ -48,7 +48,7 @@ public class TreeTestQueries {
     }
 
     public List<TreeDto> getAllUserObjects(UUID userId) {
-        return jooqTx.transactMany(dsl -> dsl.selectFrom( TREE )
+        return jooqTx.withConnectionMany( dsl -> dsl.selectFrom( TREE )
                         .where( TREE.USER_ID.eq( userId ) )
                         .orderBy( TREE.OBJECT_ID.asc() ) )
                 .map(treeRecord -> treeRecord.into( TreeDto.class) )
@@ -57,14 +57,14 @@ public class TreeTestQueries {
     }
 
     public TreeDto getByObjectId(UUID objectId) {
-        return jooqTx.transact(dsl -> dsl.selectFrom( TREE )
+        return jooqTx.withConnection( dsl -> dsl.selectFrom( TREE )
             .where( TREE.OBJECT_ID.eq( objectId ) ) )
             .mapNotNull(treeRecord -> treeRecord.into( TreeDto.class) )
            .block();
     }
 
     public TreeDto getByObjectPath(String pathStr, UUID userId) {
-        return jooqTx.transact(dsl -> dsl.selectFrom(TREE)
+        return jooqTx.withConnection( dsl -> dsl.selectFrom(TREE)
                 .where(TREE.USER_ID.eq(userId)
                         .and( TREE.PATH.eq(Ltree.valueOf( pathStr )))))
                 .map(treeRecord -> treeRecord.into( TreeDto.class) )

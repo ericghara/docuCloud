@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.jooq.CommonTableExpression;
 import org.jooq.DSLContext;
+import org.jooq.Field;
 import org.jooq.Record1;
 import org.jooq.Record2;
 import org.jooq.Record3;
@@ -19,6 +20,7 @@ import org.jooq.Record6;
 import org.jooq.ResultQuery;
 import org.jooq.SelectConditionStep;
 import org.jooq.SelectJoinStep;
+import org.jooq.TableLike;
 import org.jooq.impl.DSL;
 import org.jooq.postgres.extensions.types.Ltree;
 import org.reactivestreams.Publisher;
@@ -45,9 +47,9 @@ public class TreeRepository {
 
 
     // required treeDto fields: objectType, path
-    
+
     public Mono<TreeDto> create(TreeDto treeDto, CloudUser cloudUser) {
-        return jooqTx.transact( dsl -> dsl.insertInto( TREE )
+        return jooqTx.withConnection( dsl -> dsl.insertInto( TREE )
                         .set( TREE.OBJECT_ID, UUID.randomUUID() )
                         .set( TREE.OBJECT_TYPE, treeDto.getObjectType() )
                         .set( TREE.PATH, treeDto.getPath() )
@@ -57,12 +59,12 @@ public class TreeRepository {
                 .map( treeRecord -> treeRecord.into( TreeDto.class ) );
     }
 
-    
+
     public Mono<Long> mvFile(TreeDto source, Ltree destination, CloudUser cloudUser) {
         if (source.getObjectType() != FILE) {
             return Mono.empty();
         }
-        return jooqTx.transact( dsl -> dsl.update( TREE )
+        return jooqTx.withConnection( dsl -> dsl.update( TREE )
                         .set( TREE.PATH, destination )
                         .where( TREE.OBJECT_ID.eq( source.getObjectId() )
                                 .and( TREE.USER_ID.eq( cloudUser.getUserId() ) )
@@ -72,10 +74,10 @@ public class TreeRepository {
                 .map( (Number o) -> o.longValue() );
     }
 
-    
+
     public Mono<Long> mvDir(TreeDto source, Ltree destination, CloudUser cloudUser) throws IllegalObjectTypeException {
         TreeDtoValidator.mustBeObjectType( source, DIR );
-        return jooqTx.transact( dsl -> {
+        return jooqTx.withConnection( dsl -> {
                     var movePathCte = name( "new" ).fields( "object_id", "path" )
                             .as( createMovePath( destination, source, cloudUser, dsl ) );
                     return dsl.with( movePathCte )
@@ -88,10 +90,10 @@ public class TreeRepository {
                 .map( (Number o) -> o.longValue() );
     }
 
-    
+
     public Flux<TreeDto> rmDirRecursive(TreeDto record, CloudUser cloudUser) throws IllegalObjectTypeException {
         TreeDtoValidator.mustBeObjectType( record, DIR );
-        return jooqTx.transactMany( dsl -> {
+        return jooqTx.withConnectionMany( dsl -> {
                     // Doesn't perform internal check of proper objectType as a creating a subtree from a spoofed file is not expensive
                     SelectConditionStep<Record1<UUID>> delObjectIds = selectDescendents( record, cloudUser, dsl );
                     return dsl.delete( TREE )
@@ -101,9 +103,9 @@ public class TreeRepository {
                 .map( TreeDto::fromRecord );
     }
 
-    
+
     public Mono<TreeDto> rmNormal(TreeDto record, CloudUser cloudUser) {
-        return jooqTx.transact( dsl -> {
+        return jooqTx.withConnection( dsl -> {
                     // Doesn't perform internal check of proper objectType as a creating a subtree from a spoofed file is not expensive
                     SelectJoinStep<Record1<Integer>> doDel = hasDescendents( record, cloudUser, dsl );
                     return dsl.delete( TREE )
@@ -115,21 +117,21 @@ public class TreeRepository {
     }
 
     // returning source_id, destination_id, object_type
-    
+
     public Flux<Record3<UUID, UUID, ObjectType>> cpDir(TreeDto source, Ltree destination, CloudUser cloudUser) {
         TreeDtoValidator.mustBeObjectType( source, DIR );
-        return jooqTx.transactMany( dsl -> {
+        return jooqTx.withConnectionMany( dsl -> {
             var selectRecordCopies = fetchDirCopyRecords( destination, source, cloudUser, dsl );
             return cpCommon( selectRecordCopies, dsl );
         } );
     }
 
 
-    // Returning ObjectType is a compromise for code usability with cpDir, it will of course always be ObjectType.FILE
-    
+    // Value of objectType field in records will always be ObjectType.FILE; returning ObjectType is a compromise for code usability with cpDir.
+    // uses flexibleSelect so source must have path and/or object_id specified.
     public Mono<Record3<UUID, UUID, ObjectType>> cpFile(TreeDto source, Ltree destination, CloudUser cloudUser) {
         TreeDtoValidator.mustBeObjectType( source, FILE );
-        return jooqTx.transact( dsl -> {
+        return jooqTx.withConnection( dsl -> {
             var selectRecordCopies = fetchFileCopyRecords( destination, source, cloudUser, dsl );
             return cpCommon( selectRecordCopies, dsl );
         } );
@@ -153,7 +155,7 @@ public class TreeRepository {
     public Flux<TreeDto> ls(TreeDto source, CloudUser cloudUser) {
         CommonTableExpression<TreeRecord> parent = name( "parent" ).as(
                 this.flexibleSelect( source, cloudUser ) );
-        return jooqTx.transactMany( dsl ->
+        return jooqTx.withConnectionMany( dsl ->
                         dsl.with( parent )
                                 .select( TREE.asterisk() )
                                 .from( TREE, parent )
@@ -186,12 +188,16 @@ public class TreeRepository {
     }
 
     // the purpose of this query is to check that the source is owned by the user
-    SelectConditionStep<Record2<Ltree, Integer>> selectDirPathAndLevel(TreeDto curRecord, CloudUser cloudUser, DSLContext dsl) {
-        return dsl.select( TREE.PATH.as( "path" ),
-                        nlevel( TREE.PATH ).as( "level" ) )
-                .from( TREE )
-                .where( TREE.OBJECT_ID.eq( curRecord.getObjectId() ).and( TREE.USER_ID.eq( cloudUser.getUserId() ) )
-                        .and( TREE.OBJECT_TYPE.eq( DIR ) ) );
+    SelectConditionStep<Record2<Ltree, Integer>> selectDirPathAndLevel(TreeDto sourceRecord, CloudUser cloudUser, DSLContext dsl) {
+        CommonTableExpression<TreeRecord> source = name( "source" ).as(
+                this.flexibleSelect( sourceRecord, cloudUser ) );
+        // hack to use cte, but can't figure out how to convert ResultQuery to TableLike
+        Field<Ltree> treePath = source.field( TREE.PATH );
+        return dsl.with( source )
+                .select( treePath.as( "path" ),
+                        nlevel( treePath ).as( "level" ) )
+                .from( source )
+                .where( source.field( TREE.OBJECT_TYPE ).eq( DIR ) );
     }
 
     ResultQuery<Record2<UUID, Ltree>> createMovePath(Ltree newPath, TreeDto curRecord, CloudUser cloudUser, DSLContext dsl) {
@@ -242,6 +248,7 @@ public class TreeRepository {
                         .and( TREE.OBJECT_TYPE.ne( ObjectType.ROOT ) ) );
     }
 
+    // returns fields source_id, destination_id, object_type
     Publisher<Record3<UUID, UUID, ObjectType>> cpCommon(
             SelectConditionStep<Record6<UUID, UUID, ObjectType, Ltree, UUID, OffsetDateTime>> selectRecordCopies, DSLContext dsl) {
         var copyCte = name( "copy_records" ).fields( "source_id", "object_id", "object_type",
@@ -278,14 +285,17 @@ public class TreeRepository {
 
     SelectConditionStep<Record6<UUID, UUID, ObjectType, Ltree, UUID, OffsetDateTime>> fetchFileCopyRecords(
             Ltree destination, TreeDto sourceRecord, CloudUser cloudUser, DSLContext dsl) {
-        return dsl.select(
-                        TREE.OBJECT_ID.as( "source_id" ),
-                        uuidGenerateV4().as( TREE.OBJECT_ID ), TREE.OBJECT_TYPE,
-                        val( destination ).as( TREE.PATH ), TREE.USER_ID, currentOffsetDateTime().as( TREE.CREATED_AT ) )
-                .from( TREE )
-                .where( TREE.OBJECT_ID.eq( sourceRecord.getObjectId() )
-                        .and( TREE.USER_ID.eq( cloudUser.getUserId() ) )
-                        .and( TREE.OBJECT_TYPE.eq( FILE ) ) );
+        CommonTableExpression<TreeRecord> source = name( "source" ).as(
+                this.flexibleSelect( sourceRecord, cloudUser ) );
+        return dsl.with( source )
+                .select( source.field( TREE.OBJECT_ID ).as( "source_id" ),
+                        uuidGenerateV4().as( TREE.OBJECT_ID ),
+                        source.field( TREE.OBJECT_TYPE ),
+                        val( destination ).as( TREE.PATH ),
+                        source.field( TREE.USER_ID ),
+                        currentOffsetDateTime().as( TREE.CREATED_AT ) )
+                .from( source )
+                .where( source.field( TREE.OBJECT_TYPE ).eq( FILE ) );
     }
 
     SelectConditionStep<Record1<Boolean>> isObjectType(ObjectType objectType, TreeDto treeDto, CloudUser cloudUser, DSLContext dsl) {

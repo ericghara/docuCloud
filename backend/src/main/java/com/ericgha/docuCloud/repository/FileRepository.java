@@ -35,7 +35,7 @@ public class FileRepository {
 
     public Mono<Long> createEdge(FileDto fileDto, TreeDto treeDto, CloudUser cloudUser) {
         // linking of other user's fileObject or non file objects is prevented by table constraints
-        return jooqTx.transact( dsl -> dsl.insertInto( FILE_VIEW )
+        return jooqTx.withConnection( dsl -> dsl.insertInto( FILE_VIEW )
                         .set( FILE_VIEW.OBJECT_ID, treeDto.getObjectId() )
                         .set( FILE_VIEW.FILE_ID, fileDto.getFileId() )
                         .set( FILE_VIEW.USER_ID, cloudUser.getUserId() )
@@ -46,7 +46,7 @@ public class FileRepository {
     // fileId, and uploadedAt fields are generated and will be ignored, only fields used are checksum and size
     public Mono<FileViewDto> createFileFor(TreeDto treeObject, FileDto file, CloudUser cloudUser) {
         // linking of other user's fileObject or non file objects is prevented by table constraints
-        return jooqTx.transact( dsl -> dsl.insertInto( FILE_VIEW )
+        return jooqTx.withConnection( dsl -> dsl.insertInto( FILE_VIEW )
                         .set( FILE_VIEW.OBJECT_ID, treeObject.getObjectId() )
                         .set( FILE_VIEW.FILE_ID, UUID.randomUUID() )
                         .set( FILE_VIEW.USER_ID, cloudUser.getUserId() )
@@ -62,7 +62,7 @@ public class FileRepository {
     // returns file edge pointed to and if the file was deleted (creating an orphan fileResource)
     // throws if record not found or not user's
     public Mono<Record2<UUID, Boolean>> rmEdge(TreeJoinFileDto link, CloudUser cloudUser) {
-        return jooqTx.transact( dsl -> dsl.select( FILE_VIEW.FILE_ID,
+        return jooqTx.withConnection( dsl -> dsl.select( FILE_VIEW.FILE_ID,
                         fileViewDel( FILE_VIEW.OBJECT_ID, FILE_VIEW.FILE_ID, FILE_VIEW.USER_ID ).as( "orphan" ) )
                 .from( FILE_VIEW )
                 .where( FILE_VIEW.OBJECT_ID.eq( link.getObjectId() )
@@ -73,7 +73,7 @@ public class FileRepository {
     // This is intended for when an object is deleted from treeRepository
     // returns file edge pointed to and if the file was deleted (creating an orphan fileResource)
     public Flux<Record2<UUID, Boolean>> rmEdgesFrom(UUID objectId, CloudUser cloudUser) {
-        return jooqTx.transactMany( dsl -> dsl.select( FILE_VIEW.FILE_ID,
+        return jooqTx.withConnectionMany( dsl -> dsl.select( FILE_VIEW.FILE_ID,
                         fileViewDel( FILE_VIEW.OBJECT_ID, FILE_VIEW.FILE_ID, FILE_VIEW.USER_ID ).as( "orphan" ) )
                 .from( FILE_VIEW )
                 .where( FILE_VIEW.OBJECT_ID.eq( objectId ).and(FILE_VIEW.USER_ID.eq(cloudUser.getUserId()) ) ) );
@@ -91,7 +91,7 @@ public class FileRepository {
 
     Mono<Long> cpCommon(UUID destinationObjectId, ResultQuery<FileViewRecord> edgesToCopy) {
         var toCopy = name( "source" ).as( edgesToCopy );
-        return jooqTx.transact( dsl -> dsl.with( toCopy )
+        return jooqTx.withConnection( dsl -> dsl.with( toCopy )
                         .insertInto( TREE_JOIN_FILE )
                         .select( dsl.select( val( destinationObjectId, UUID.class ), toCopy.field( FILE_VIEW.FILE_ID ), currentOffsetDateTime() ).from( toCopy ) ) )
                 // this actually returns a long at runtime, but at compile time expects an Integer
@@ -99,7 +99,7 @@ public class FileRepository {
     }
 
     public Mono<Long> countFilesFor(TreeDto treeDto, CloudUser cloudUser) {
-        return jooqTx.transact( dsl -> dsl.select( count( asterisk() ).cast( Long.class ) )
+        return jooqTx.withConnection( dsl -> dsl.select( count( asterisk() ).cast( Long.class ) )
                         .from( FILE_VIEW )
                         .where( FILE_VIEW.OBJECT_ID.eq( treeDto.getObjectId() )
                                 .and( FILE_VIEW.USER_ID.eq( cloudUser.getUserId() ) ) ) )
@@ -118,7 +118,7 @@ public class FileRepository {
     }
 
     public Flux<FileViewDto> lsNextFilesFor(FileViewDto lastRecord, int limit, CloudUser cloudUser) {
-        return jooqTx.transactMany( dsl -> dsl.select( asterisk() )
+        return jooqTx.withConnectionMany( dsl -> dsl.select( asterisk() )
                         .from( FILE_VIEW )
                         .where( FILE_VIEW.OBJECT_ID.eq( lastRecord.getObjectId() ).and( FILE_VIEW.USER_ID.eq( cloudUser.getUserId() ) ) )
                         .orderBy( FILE_VIEW.LINKED_AT.desc(), FILE_VIEW.UPLOADED_AT.desc(), FILE_VIEW.FILE_ID.desc() )

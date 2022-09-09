@@ -32,7 +32,7 @@ public class TreeDtoValidator {
         return found;
     }
 
-    public static ObjectType mustBeOneOfObjectTypes(TreeDto treeDto, ObjectType... objectTypes) {
+    public static ObjectType mustBeOneOfObjectTypes(TreeDto treeDto, ObjectType... objectTypes) throws IllegalObjectTypeException {
         String messageTemplate = "Allowed objectType(s): %s but Found: %s";
         ObjectType found;
         try {
