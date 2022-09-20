@@ -31,7 +31,7 @@ import java.util.UUID;
 import static com.ericgha.docuCloud.jooq.enums.ObjectType.DIR;
 import static com.ericgha.docuCloud.jooq.enums.ObjectType.FILE;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doReturn;
 
 @RunWith( SpringRunner.class )
 @ActiveProfiles(value = {"test", "s3", "dev"})
@@ -106,7 +106,7 @@ public class DocumentServiceTest {
 
     @Test
     @DisplayName( "mv throws when mono empty returned" )
-    void mvCallsMvThrows() {
+    void mvThrowsWhenReturnsEmpty() {
         doReturn( Mono.empty() ).when(treeRepositoryMock).mvFile(any(TreeDto.class), any(Ltree.class), any(CloudUser.class) );
 
         var treeObj = TreeDto.builder().objectId( UUID.randomUUID() )

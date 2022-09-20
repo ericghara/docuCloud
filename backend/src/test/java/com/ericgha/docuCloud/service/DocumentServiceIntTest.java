@@ -109,6 +109,7 @@ public class DocumentServiceIntTest {
     ls                                   X                   X              -
     fetchFirstPageFileVersions           *                   X              -
     fetchNextPage                        *                   X              -
+    getFileData                          -                   -              X
     rmTreeObject                         X                   X              X     
     rmVersion                            *                   X              X
     createRoot                           X                   -              -
@@ -497,7 +498,7 @@ public class DocumentServiceIntTest {
         @DisplayName("rmVersion removes expected file and data")
         void rmVersionRemovesExpected(@Autowired FileTestQueries fileTestQueries) {
             FileViewDto toRemove = fileViews.get( 2 );
-            Mono<Void> rm = documentService.rmVersion( file0, toRemove, user );
+            Mono<Void> rm = documentService.rmVersion( toRemove, user );
             rm.as( StepVerifier::create )
                     .verifyComplete();
             // deleted from fileStore

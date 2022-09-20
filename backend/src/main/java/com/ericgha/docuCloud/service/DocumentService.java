@@ -73,9 +73,9 @@ public class DocumentService {
     }
 
 
-    public Mono<SeekInitResponse> fetchFirstPageFileVersions(TreeDto treeDto, int limit, CloudUser cloudUser) {
-        var count = fileRepository.countFilesFor( treeDto, cloudUser );
-        var fileList = fileRepository.lsNewestFilesFor( treeDto, limit, cloudUser );
+    public Mono<SeekInitResponse> fetchFirstPageFileVersions(TreeDto source, int limit, CloudUser cloudUser) {
+        var count = fileRepository.countFilesFor( source, cloudUser );
+        var fileList = fileRepository.lsNewestFilesFor( source, limit, cloudUser );
         return Mono.just( new SeekInitResponse( fileList, count ) );
     }
 
@@ -101,9 +101,9 @@ public class DocumentService {
     }
 
 
-    public <T extends FileDto> Mono<Void> rmVersion(TreeDto treeDto, T fileDto, CloudUser cloudUser) {
-        TreeJoinFileDto record = TreeJoinFileDto.builder().objectId( treeDto.getObjectId() )
-                .fileId( fileDto.getFileId() )
+    public <T extends FileDto> Mono<Void> rmVersion(FileViewDto fileViewDto, CloudUser cloudUser) throws DeleteFailureException {
+        TreeJoinFileDto record = TreeJoinFileDto.builder().objectId( fileViewDto.getObjectId() )
+                .fileId( fileViewDto.getFileId() )
                 .build();
         // This will always flat map to 1 UUID, however delete files is designed to take requests of multiple files
         Mono<List<UUID>> versionsToDelete = PublisherUtil.requireNext( fileRepository.rmEdge( record, cloudUser ),
@@ -146,9 +146,8 @@ public class DocumentService {
                 .as( jooqTrans::inTransaction );
     }
 
-    // The only Information used from treeDto is objectId.  The only
+    // The only Information used from treeDto is objectId and ObjectType.  The only
     // information used from fileDto is checksum and size
-
     public <T extends FileDto> Mono<TreeAndFileView> addFileVersion(@NonNull TreeDto treeDto,
                                                                     @NonNull T fileDto,
                                                                     @NonNull Flux<ByteBuffer> data,
@@ -180,7 +179,10 @@ public class DocumentService {
     }
 
 
-    public Mono<Long> mv(TreeDto source, Ltree destination, CloudUser cloudUser) {
+    // UpdateFailureException - empty, any other error, treeRepository returns 0,
+    // NullPointerException - ObjectType = null
+    // IllegalArgument exception - ObjectType != FILE or DIR
+    public Mono<Long> mv(TreeDto source, Ltree destination, CloudUser cloudUser) throws UpdateFailureException,IllegalObjectTypeException, NullPointerException {
         var objectType = TreeDtoValidator.getOrThrow( source.getObjectType(), "objectType" );
         String exceptionMsg;
         Mono<Long> mvMono;
@@ -200,7 +202,9 @@ public class DocumentService {
     }
 
 
-    public Mono<Void> cp(TreeDto source, Ltree destination, boolean onlyNewestVer, CloudUser cloudUser) {
+    // NullPointerException - ObjectType == null
+    // InsertFailureException - no records copied in Tree
+    public Mono<Void> cp(TreeDto source, Ltree destination, boolean onlyNewestVer, CloudUser cloudUser) throws NullPointerException {
         return this.cpTreeOperations( source, destination, cloudUser )
                 .flatMap( record3 -> this.cpFileOperations( record3, onlyNewestVer, cloudUser ) )
                 .as( jooqTrans::inTransaction )
