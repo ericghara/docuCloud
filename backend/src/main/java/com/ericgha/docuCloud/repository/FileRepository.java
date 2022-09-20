@@ -74,9 +74,11 @@ public class FileRepository {
     // returns file edge pointed to and if the file was deleted (creating an orphan fileResource)
     public Flux<Record2<UUID, Boolean>> rmEdgesFrom(UUID objectId, CloudUser cloudUser) {
         return jooqTx.withConnectionMany( dsl -> dsl.select( FILE_VIEW.FILE_ID,
+                        // fileViewDel is custom a table function to perform deletes, returns true if version
+                        // became an orphan (no other TreeObjects link to it) and was deleted
                         fileViewDel( FILE_VIEW.OBJECT_ID, FILE_VIEW.FILE_ID, FILE_VIEW.USER_ID ).as( "orphan" ) )
                 .from( FILE_VIEW )
-                .where( FILE_VIEW.OBJECT_ID.eq( objectId ).and(FILE_VIEW.USER_ID.eq(cloudUser.getUserId()) ) ) );
+                .where( FILE_VIEW.OBJECT_ID.eq( objectId ).and( FILE_VIEW.USER_ID.eq( cloudUser.getUserId() ) ) ) );
     }
 
     public Mono<Long> cpNewestFile(UUID sourceObjectId, UUID destinationObjectId, CloudUser cloudUser) {
@@ -86,7 +88,7 @@ public class FileRepository {
 
     public Mono<Long> cpAllFiles(UUID sourceObjectId, UUID destinationObjectId, CloudUser cloudUser) {
         Mono<ResultQuery<FileViewRecord>> allFiles = this.selectAllFilesLinkedTo( sourceObjectId, cloudUser );
-        return allFiles.flatMap(query -> this.cpCommon( destinationObjectId, query ) );
+        return allFiles.flatMap( query -> this.cpCommon( destinationObjectId, query ) );
     }
 
     Mono<Long> cpCommon(UUID destinationObjectId, ResultQuery<FileViewRecord> edgesToCopy) {
@@ -113,7 +115,7 @@ public class FileRepository {
 
     public Flux<FileViewDto> lsNewestFilesFor(TreeDto treeDto, int limit, CloudUser cloudUser) {
         return selectNewestFilesLinkedTo( treeDto.getObjectId(), cloudUser, limit )
-                .flatMapMany(Flux::from)
+                .flatMapMany( Flux::from )
                 .mapNotNull( FileViewDto::fromRecord );
     }
 

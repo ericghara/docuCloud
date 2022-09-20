@@ -5,7 +5,6 @@ import com.ericgha.docuCloud.configuration.AwsConfig;
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.FileDto;
 import com.ericgha.docuCloud.testconainer.EnableMinioTestContainerContextCustomizerFactory.EnableMinioTestContainer;
-import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,7 +29,6 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 
 @SpringBootTest(classes = {S3FileStore.class, S3AsyncClient.class, AwsConfig.class, AppConfig.class})
-@Slf4j
 @EnableMinioTestContainer
 @ActiveProfiles(value = {"test","s3","dev"})
 public class S3FileStoreIntTest {
@@ -141,19 +139,20 @@ public class S3FileStoreIntTest {
     void deleteFile() throws NoSuchAlgorithmException {
         byte[] data = new byte[256];
         byte[] digest = MessageDigest.getInstance( "SHA-1" ).digest(data);
-        // minio currently doesn't validate uploaded file with checksum
-        // so unfortunately that portion of putFile is not tested
         String checksum = Base64.getEncoder().encodeToString( digest );
         Flux<ByteBuffer> dataFlux = Flux.fromIterable( List.of(ByteBuffer.wrap( data ) ) );
         FileDto fileDto = FileDto.builder().fileId( UUID.randomUUID() )
                 .checksum( checksum )
                 .size( (long) data.length )
                 .build();
+        // create a random file and version
         var putMono = s3FileStore.putFile( dataFlux, fileDto, user0 );
         var delMono = Mono.defer(
-                () -> s3FileStore.deleteFiles( Mono.just(fileDto.getFileId() ).flux(), user0 ) );
+                () -> s3FileStore.deleteFiles( Mono.just(fileDto.getFileId() )
+                        .flux().collectList(), user0 ) );
+        // check that file doesn't exist after delete
         var existsMono = Flux.defer( () -> s3FileStore.getFile( fileDto, user0 ) );
-        StepVerifier.create( putMono.then(delMono)
-                .thenMany( existsMono ) ).expectError( NoSuchKeyException.class ).verify();
+        putMono.then(delMono).thenMany( existsMono ).as(StepVerifier::create)
+                .expectError( NoSuchKeyException.class ).verify();
     }
 }

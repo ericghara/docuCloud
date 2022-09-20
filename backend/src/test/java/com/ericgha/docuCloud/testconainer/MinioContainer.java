@@ -39,11 +39,11 @@ public class MinioContainer extends GenericContainer<MinioContainer> {
 
         super.withEnv( USER_ENV_KEY, accessKeyId );
         super.withEnv( PASSWORD_ENV_KEY, secretAccessKey );
-        super.withCommand("server", DEFAULT_STORAGE_DIRECTORY);
+        super.withCommand("server", DEFAULT_STORAGE_DIRECTORY, "--console-address", ":" + WEB_PORT );
         setWaitStrategy(new HttpWaitStrategy()
                 .forPort( API_PORT )
                 .forPath(MINIO_HEALTH_ENDPOINT)
-                .withStartupTimeout( Duration.ofMinutes(2)));
+                .withStartupTimeout( Duration.ofMinutes(1)));
     }
 
     public String getApiAddress() {

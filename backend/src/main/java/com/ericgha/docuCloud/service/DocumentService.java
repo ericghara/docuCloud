@@ -26,8 +26,10 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -82,30 +84,34 @@ public class DocumentService {
         return fileRepository.lsNextFilesFor( lastFileView, limit, cloudUser );
     }
 
-//    public Mono<Void> rmTreeObject(TreeDto record, @NonNull Boolean recursive, CloudUser cloudUser) {
-//        Function<DSLContext, Mono<Void>> rmTrans = trxDsl -> {
-//            Flux<UUID> versionsToDelete = Mono.just( recursive )
-//                    .flatMapMany( b -> b ? treeRepository.rmDirRecursive( record, cloudUser, trxDsl ) :
-//                            treeRepository.rmNormal( record, cloudUser, trxDsl ).flux() )
-//                    .map( TreeDto::getObjectId )
-//                    .flatMap( objectId -> fileRepository.rmEdgesFrom( objectId, cloudUser ) )
-//                    .filter( record2 -> record2.get( "orphan", Boolean.class ) )
-//                    .map( record2 -> record2.get( "file_id", UUID.class ) );
-//            return fileStore.deleteFiles( versionsToDelete, cloudUser );
-//        };
-//        return trxDslPublisher.withConnection( rmTrans );
-//    }
+    public Mono<Void> rmTreeObject(TreeDto record, @NonNull Boolean recursive, CloudUser cloudUser) {
+        Flux<TreeDto> rmTree;
+        if (recursive) {
+            rmTree = treeRepository.rmDirRecursive( record, cloudUser );
+        } else {
+            rmTree = treeRepository.rmNormal( record, cloudUser )
+                    .flux();
+        }
+        Mono<List<UUID>> versionsToDelete = rmTree.map( TreeDto::getObjectId )
+                .flatMap( objectId -> fileRepository.rmEdgesFrom( objectId, cloudUser ) )
+                .filter( record2 -> record2.get( "orphan", Boolean.class ) )
+                .map( record2 -> record2.get( "file_id", UUID.class ) )
+                .collectList();
+        return fileStore.deleteFiles( versionsToDelete, cloudUser ).as( jooqTrans::inTransaction );
+    }
 
 
     public <T extends FileDto> Mono<Void> rmVersion(TreeDto treeDto, T fileDto, CloudUser cloudUser) {
         TreeJoinFileDto record = TreeJoinFileDto.builder().objectId( treeDto.getObjectId() )
                 .fileId( fileDto.getFileId() )
                 .build();
-        Flux<UUID> versionsToDelete = PublisherUtil.requireNext( fileRepository.rmEdge( record, cloudUser ),
+        // This will always flat map to 1 UUID, however delete files is designed to take requests of multiple files
+        Mono<List<UUID>> versionsToDelete = PublisherUtil.requireNext( fileRepository.rmEdge( record, cloudUser ),
                         e -> new DeleteFailureException( "FileRepository", e ) )
                 .filter( record2 -> record2.get( "orphan", Boolean.class ) )
                 .map( record2 -> record2.get( "file_id", UUID.class ) )
-                .flux();
+                .flux()
+                .collectList();
         return fileStore.deleteFiles( versionsToDelete, cloudUser );
     }
 
@@ -123,9 +129,9 @@ public class DocumentService {
      */
 
     public <T extends FileDto> Mono<TreeAndFileView> createFile(@NonNull TreeDto treeDto,
-                                            @NonNull T fileDto,
-                                            @NonNull Flux<ByteBuffer> data,
-                                            @NonNull CloudUser cloudUser) throws IllegalObjectTypeException, InsertFailureException {
+                                                                @NonNull T fileDto,
+                                                                @NonNull Flux<ByteBuffer> data,
+                                                                @NonNull CloudUser cloudUser) throws IllegalObjectTypeException, InsertFailureException {
         TreeDtoValidator.mustBeObjectType( treeDto, FILE );
 
         return PublisherUtil.requireNext(
@@ -144,9 +150,9 @@ public class DocumentService {
     // information used from fileDto is checksum and size
 
     public <T extends FileDto> Mono<TreeAndFileView> addFileVersion(@NonNull TreeDto treeDto,
-                                                @NonNull T fileDto,
-                                                @NonNull Flux<ByteBuffer> data,
-                                                @NonNull CloudUser cloudUser) throws InsertFailureException, IllegalObjectTypeException {
+                                                                    @NonNull T fileDto,
+                                                                    @NonNull Flux<ByteBuffer> data,
+                                                                    @NonNull CloudUser cloudUser) throws InsertFailureException, IllegalObjectTypeException {
         TreeDtoValidator.mustBeObjectType( treeDto, FILE );
         return PublisherUtil.requireNext(
                         fileRepository.createFileFor( treeDto, fileDto, cloudUser ),
@@ -155,7 +161,7 @@ public class DocumentService {
                 .flatMap( treeAndFileView -> this.putDocumentIfFile( treeAndFileView, data, cloudUser ) );
     }
 
-    public <T extends FileDto> Flux<ByteBuffer> getFileData(T fileDto, CloudUser cloudUser) {
+    public <T extends FileDto> Flux<ByteBuffer> getFileData(T fileDto, CloudUser cloudUser) throws NoSuchKeyException {
         return fileStore.getFile( fileDto, cloudUser );
     }
 
@@ -258,7 +264,6 @@ public class DocumentService {
      *
      * @param flux
      * @param cloudUser
-     * @param trxDsl
      * @return
      */
     private Flux<TreeAndFileView> zipWithFileViewDtos(Flux<TreeDto> flux, CloudUser cloudUser) {

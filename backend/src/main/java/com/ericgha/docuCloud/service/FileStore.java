@@ -6,6 +6,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -25,8 +26,10 @@ public interface FileStore {
 
     <T extends FileDto> Mono<Void> putFile(Flux<ByteBuffer> data, T filDto, CloudUser cloudUser) throws RuntimeException;
 
-    <T extends FileDto> Flux<ByteBuffer> getFile(T fileDto, CloudUser cloudUser);
+    <T extends FileDto> Flux<ByteBuffer> getFile(T fileDto, CloudUser cloudUser) throws RuntimeException;
 
-    Mono<Void> deleteFiles(Flux<UUID> fileIds, CloudUser cloudUser) throws RuntimeException;
+    Mono<Void> deleteFiles(Mono<List<UUID>> fileIds, CloudUser cloudUser) throws RuntimeException;
+
+    int getDeleteFilesMax();
 
 }

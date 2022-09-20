@@ -6,13 +6,16 @@ import com.ericgha.docuCloud.dto.FileDto;
 import com.ericgha.docuCloud.dto.FileViewDto;
 import com.ericgha.docuCloud.dto.TreeAndFileView;
 import com.ericgha.docuCloud.dto.TreeDto;
+import com.ericgha.docuCloud.exceptions.DeleteFailureException;
 import com.ericgha.docuCloud.exceptions.IllegalObjectTypeException;
 import com.ericgha.docuCloud.exceptions.InsertFailureException;
 import com.ericgha.docuCloud.exceptions.RecordNotFoundException;
 import com.ericgha.docuCloud.repository.FileRepository;
 import com.ericgha.docuCloud.repository.TreeRepository;
+import com.ericgha.docuCloud.repository.testtool.file.FileTestQueries;
 import com.ericgha.docuCloud.repository.testtool.file.RandomFileGenerator;
 import com.ericgha.docuCloud.repository.testtool.file.RandomFileGenerator.FileDtoAndData;
+import com.ericgha.docuCloud.repository.testtool.tree.TreeTestQueries;
 import com.ericgha.docuCloud.testconainer.EnableMinioTestContainerContextCustomizerFactory.EnableMinioTestContainer;
 import com.ericgha.docuCloud.testconainer.EnablePostgresTestContainerContextCustomizerFactory.EnablePostgresTestContainer;
 import org.jooq.postgres.extensions.types.Ltree;
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -28,6 +32,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -35,17 +40,16 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static com.ericgha.docuCloud.jooq.enums.ObjectType.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest
 @EnablePostgresTestContainer
@@ -414,46 +418,61 @@ public class DocumentServiceIntTest {
     }
 
     @Nested
-    @DisplayName("Pagination tests")
+    @DisplayName("File Version tests")
     @EnablePostgresTestContainer
     @EnableMinioTestContainer
     @ActiveProfiles(value = {"test", "s3", "dev"})
-    class Pagination {
+    class VersionTests {
 
+        private static final int NUM_VERSIONS = 15;
         private TreeDto file0;
-        private final List<FileViewDto> fileViews = new ArrayList<>();
+        private final CloudUser user = user0;
+        private final LinkedList<FileViewDto> fileViews = new LinkedList<>();  // need a slice-able queue
 
         @BeforeEach
         void before() {
             TreeDto file0 = TreeDto.builder()
                     .path( Ltree.valueOf( "file0" ) )
                     .objectType( FILE ).build();
-            final FileDtoAndData fileAndData = randomFileGenerator.generate();
-            Deque<FileViewDto> fileViewQueue = new ArrayDeque<>();
-            Mono<Void> add15 = documentService.createFile( file0, fileAndData.fileDto(), fileAndData.data(), user0 )
-                    .doOnNext( n -> {
-                        fileViewQueue.addFirst( n.fileViewDto() );
-                        this.file0 = n.treeDto();
-                    } )
-                    .map( TreeAndFileView::treeDto )
-                    .flatMapMany( treeDto -> Flux.concat(
-                            Flux.fromStream( IntStream.range( 0, 14 ).boxed() )
-                                    .map( x -> documentService.addFileVersion(
-                                            treeDto, fileAndData.fileDto(), fileAndData.data(), user0 ) ) ) )
-                    .doOnNext( n -> fileViewQueue.addFirst( n.fileViewDto() ) )
-                    .then();
+            Mono<Void> add15 = this.createFile( file0 ).map( TreeAndFileView::treeDto )
+                    .then( Mono.defer( () -> addFileVersions( NUM_VERSIONS - 1 ) ) );
             add15.as( StepVerifier::create )
                     .verifyComplete();
-            fileViews.addAll( fileViewQueue );
+        }
+
+        private Mono<TreeAndFileView> createFile(TreeDto toCreate) {
+            // this is pretty fragile, in theory could create files from many treeDtos and add to list
+            // flagging but not fixing as this is a test class
+            final FileDtoAndData fileAndData = randomFileGenerator.generate();
+            return documentService.createFile( toCreate, fileAndData.fileDto(), fileAndData.data(), user )
+                    .doOnNext( n -> {
+                        fileViews.addFirst( n.fileViewDto() );
+                        this.file0 = n.treeDto();
+                    } );
+        }
+
+        private Mono<TreeAndFileView> addVersion() {
+            final FileDtoAndData fileAndData = randomFileGenerator.generate();
+            return documentService.addFileVersion(
+                            file0, fileAndData.fileDto(), fileAndData.data(), user )
+                    .doOnNext( newVersion -> fileViews.addFirst( newVersion.fileViewDto() ) );
+        }
+
+        private Mono<Void> addFileVersions(int n) {
+            return Flux.concat( IntStream.range( 0, n ).boxed()
+                            .map( x -> addVersion() )
+                            .toArray( Mono[]::new )
+                    )
+                    .then();
         }
 
         @Test
         @DisplayName("fetchFirstPageFileVersions returns first page of records")
         void fetchFirstPageFileVersionsReturnsExpected() {
             final int LIMIT = 7;
-            var firstPage = documentService.fetchFirstPageFileVersions( file0, LIMIT, user0 )
+            var firstPage = documentService.fetchFirstPageFileVersions( file0, LIMIT, user )
                     .block();
-            Iterable<FileViewDto> expectedFiles =  fileViews.subList( 0, 7 );
+            Iterable<FileViewDto> expectedFiles = fileViews.subList( 0, 7 );
             firstPage.numVersions().as( StepVerifier::create )
                     .expectNext( (long) fileViews.size() )
                     .verifyComplete();
@@ -463,16 +482,75 @@ public class DocumentServiceIntTest {
         }
 
         @Test
-        @DisplayName( "fetch next page fetches expected records" )
+        @DisplayName("fetch next page fetches expected records")
         void fetchNextPageReturnsExpected() {
             final int LIMIT = 7;
-            FileViewDto lastRecordOnFirstPage = fileViews.get(6);
-            Iterable<FileViewDto> expectedNextPage = fileViews.subList( 7, 14 );
-            Flux<FileViewDto> secondPage = documentService.fetchNextPage( lastRecordOnFirstPage, LIMIT, user0 );
-            secondPage.as(StepVerifier::create)
+            FileViewDto lastRecordOnFirstPage = fileViews.get( 6 );
+            Iterable<FileViewDto> expectedNextPage = fileViews.subList( 7, 7 + LIMIT );
+            Flux<FileViewDto> secondPage = documentService.fetchNextPage( lastRecordOnFirstPage, LIMIT, user );
+            secondPage.as( StepVerifier::create )
                     .expectNextSequence( expectedNextPage )
                     .verifyComplete();
         }
 
+        @Test
+        @DisplayName("rmVersion removes expected file and data")
+        void rmVersionRemovesExpected(@Autowired FileTestQueries fileTestQueries) {
+            FileViewDto toRemove = fileViews.get( 2 );
+            Mono<Void> rm = documentService.rmVersion( file0, toRemove, user );
+            rm.as( StepVerifier::create )
+                    .verifyComplete();
+            // deleted from fileStore
+            Flux<ByteBuffer> fetchData = documentService.getFileData( toRemove, user );
+            fetchData.as( StepVerifier::create )
+                    .verifyError( NoSuchKeyException.class );
+            // deleted from FileView
+            Mono<FileViewDto> ls = fileTestQueries.fetchFileViewDto( toRemove );
+            ls.as( StepVerifier::create )
+                    .expectNextCount( 0 )
+                    .verifyComplete();
+        }
+
+        @Test
+        @DisplayName("rmTreeObject deletes FileObject from Tree Files from FileView and data from FileStore")
+        void rmTreeObjectRemovesExpected(@Autowired FileTestQueries fileTestQueries,
+                                         @Autowired TreeTestQueries treeTestQueries,
+                                         @Autowired FileViewDtoToFileDto fileViewToFile) {
+            Mono<Void> rm = documentService.rmTreeObject( file0, false, user );
+            rm.as( StepVerifier::create ).verifyComplete();
+            assertNull( treeTestQueries.getByObjectId( file0.getObjectId() ) );
+            fileTestQueries.fetchRecordsByObjectId( file0.getObjectId() ).as( StepVerifier::create )
+                    .expectNextCount( 0 )
+                    .verifyComplete();
+            fileViews.stream().map( fileViewToFile::convert )
+                    .forEach( file -> documentService.getFileData( file, user )
+                            .as( StepVerifier::create )
+                            .verifyError( NoSuchKeyException.class ) );
+        }
+
+        @Test
+        @DisplayName("rmTreeObject rolls back when document service returns exception")
+        void rmTreeObjectRollsBack(@Autowired TreeRepository treeRepository,
+                                   @Autowired FileRepository fileRepository) {
+            FileStore fileStoreMock = Mockito.mock( FileStore.class );
+            // fileStore throws exception on delete
+            when( fileStoreMock.deleteFiles( any(), any() ) ).thenReturn( Mono.error( new DeleteFailureException() ) );
+            // instantiate a document service using mock
+            DocumentService documentService = new DocumentService( fileStoreMock, fileRepository, treeRepository, jooqTx );
+            Mono<Void> rm = documentService.rmTreeObject( file0, false, user );
+            // will fail in terminal step, deleting from fileStore
+            rm.as( StepVerifier::create )
+                    .verifyError( DeleteFailureException.class );
+            // delete from tree rolled back
+            treeRepository.ls( file0, user )
+                    .as( StepVerifier::create )
+                    .expectNext( file0 )
+                    .verifyComplete();
+            // delete from fileRepository rolled back
+            fileRepository.lsNewestFilesFor( file0, fileViews.size(), user )
+                    .as( StepVerifier::create )
+                    .expectNextSequence( fileViews )
+                    .verifyComplete();
+        }
     }
 }

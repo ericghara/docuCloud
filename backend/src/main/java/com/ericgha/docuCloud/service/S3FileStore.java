@@ -3,6 +3,7 @@ package com.ericgha.docuCloud.service;
 import com.ericgha.docuCloud.converter.ObjectIdentifierGenerator;
 import com.ericgha.docuCloud.dto.CloudUser;
 import com.ericgha.docuCloud.dto.FileDto;
+import com.ericgha.docuCloud.exceptions.DeleteFailureException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationStartedEvent;
@@ -12,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
 import software.amazon.awssdk.core.async.AsyncResponseTransformer;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
@@ -28,12 +30,14 @@ import software.amazon.awssdk.services.s3.model.ListBucketsResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.ObjectIdentifier;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 
 import static reactor.core.publisher.Mono.fromFuture;
@@ -44,8 +48,8 @@ import static reactor.core.publisher.Mono.fromFuture;
 public class S3FileStore implements FileStore {
 
     // max objects per request of deleteObjects
-    private static final int DELETE_OBJECTS_MAX = 1000;
-    private static final Duration READY_TIMEOUT = Duration.ofSeconds(93L);
+    private static final int DELETE_FILES_MAX = 1000;
+    private static final Duration READY_TIMEOUT = Duration.ofSeconds( 93L );
 
     private static final ChecksumAlgorithm CHECKSUM_ALGORITHM = ChecksumAlgorithm.SHA1;
     private final S3AsyncClient s3Client;
@@ -78,12 +82,12 @@ public class S3FileStore implements FileStore {
     @Override
     public Mono<Boolean> createBucketIfNotExists() {
         CreateBucketRequest request = CreateBucketRequest.builder()
-                .bucket(bucketName)
+                .bucket( bucketName )
                 .build();
         return fromFuture( s3Client.createBucket( request ) )
-                .map(r -> true)
+                .map( r -> true )
                 .onErrorReturn( BucketAlreadyOwnedByYouException.class, false )
-                .retry(3)
+                .retry( 3 )
                 .timeout( Duration.ofSeconds( 30 ) );
 
     }
@@ -92,7 +96,7 @@ public class S3FileStore implements FileStore {
     public Mono<Boolean> bucketExists() throws RuntimeException {
         HeadBucketRequest request = HeadBucketRequest.builder().bucket( bucketName ).build();
         return fromFuture( s3Client.headBucket( request ) )
-                .map(r -> true)
+                .map( r -> true )
                 .onErrorReturn( NoSuchBucketException.class, false );
     }
 
@@ -104,67 +108,97 @@ public class S3FileStore implements FileStore {
                 .contentLength( fileDto.getSize() )
                 // add content type to file
                 .contentType( MediaType.APPLICATION_OCTET_STREAM_VALUE )
-                .key(ObjectIdentifierGenerator.generate( fileDto, cloudUser ).key() )
+                .key( ObjectIdentifierGenerator.generate( fileDto, cloudUser ).key() )
                 .checksumAlgorithm( CHECKSUM_ALGORITHM )
                 .checksumSHA1( fileDto.getChecksum() )
                 .build();
-        return Mono.fromFuture( s3Client.putObject( request, AsyncRequestBody.fromPublisher(data) ) )
+        return Mono.fromFuture( s3Client.putObject( request, AsyncRequestBody.fromPublisher( data ) ) )
                 .then();
     }
 
     @Override
-    public <T extends FileDto> Flux<ByteBuffer> getFile(T fileDto, CloudUser cloudUser) {
+    public <T extends FileDto> Flux<ByteBuffer> getFile(T fileDto, CloudUser cloudUser) throws NoSuchKeyException {
         var request = GetObjectRequest.builder()
                 .bucket( bucketName )
                 .key( ObjectIdentifierGenerator.generate( fileDto, cloudUser ).key() )
                 .build();
-        return Mono.fromFuture(s3Client.getObject( request, AsyncResponseTransformer.toPublisher() ) )
+        return Mono.fromFuture( s3Client.getObject( request, AsyncResponseTransformer.toPublisher() ) )
                 .flatMapMany( Flux::from );
     }
 
+    /**
+     * Atomic delete from S3.
+     *
+     * @param fileIds   list of fileIds to delete
+     * @param cloudUser user
+     * @return void
+     * @throws DeleteFailureException if {@link software.amazon.awssdk.services.s3.model.DeleteObjectsResponse DeleteObjectsResponse} has errors
+     * @throws IllegalArgumentException requested number of records exceeds {@code DELETE_OBJECTS_MAX}
+     * @see S3FileStore#getDeleteFilesMax()
+     */
     @Override
-    public Mono<Void> deleteFiles(Flux<UUID> fileIds, CloudUser cloudUser) throws RuntimeException {
-        Flux<ObjectIdentifier> objectIdentifiers = fileIds.map(fileId -> ObjectIdentifierGenerator.generate(fileId, cloudUser) );
+    public Mono<Void> deleteFiles(Mono<List<UUID>> fileIds, CloudUser cloudUser) throws DeleteFailureException, IllegalArgumentException {
+        Mono<List<ObjectIdentifier>> objectIdentifiers =
+                fileIds.map( listIds -> ObjectIdentifierGenerator.generate( listIds, cloudUser ) );
         return deleteObjects( objectIdentifiers );
     }
 
-    Mono<Void> deleteObjects(Flux<ObjectIdentifier> objects) throws RuntimeException {
-        return objects.buffer( DELETE_OBJECTS_MAX )
-                .map(objectIdentifiers -> Delete.builder().objects( objectIdentifiers ).build() )
-                .map(delete -> DeleteObjectsRequest.builder().bucket( bucketName ).delete( delete ).build() )
-                .flatMap( request -> Mono.fromFuture(s3Client.deleteObjects( request ) )
-                        .map(response -> {
-                            System.out.println(response);
-                            if ( response.hasErrors() && !response.errors().isEmpty() ) {
-                                throw new RuntimeException("Error while deleting file");
+    @Override
+    public int getDeleteFilesMax() {
+        return DELETE_FILES_MAX;
+    }
+
+    Mono<Void> deleteObjects(Mono<List<ObjectIdentifier>> objects) throws RuntimeException {
+        return objects.as( this::assertLteDeleteMax )
+                .map( objectIdentifiers -> Delete.builder().objects( objectIdentifiers ).build() )
+                .map( delete -> DeleteObjectsRequest.builder()
+                        .bucket( bucketName ).delete( delete ).build() )
+                .flatMap( request -> Mono.fromFuture( s3Client.deleteObjects( request ) )
+                        .timeout( Duration.ofSeconds( 5 ) )
+                        .retryWhen( Retry.backoff( 3, Duration.ofMillis( 100 ) )
+                                .filter( e -> !( e instanceof IllegalArgumentException ) ) )
+                        .doOnNext( response -> {
+                            if (response.hasErrors() && !response.errors().isEmpty()) {
+                                log.debug( "Errors from AWS: {}", response.errors() );
+                                throw new DeleteFailureException( "Error response from AWS while deleting file" );
                             }
-                            return response.hasDeleted() && !response.deleted().isEmpty();
-                        } ) ).then();
+                        } ) )
+                .then();
+    }
+
+    private <T> Mono<List<T>> assertLteDeleteMax(Mono<List<T>> listMono) {
+        return listMono.doOnNext( list -> {
+            if (list.size() > DELETE_FILES_MAX) {
+                throw new IllegalArgumentException( String.format( "Cannot delete more than %s files in a single request", DELETE_FILES_MAX ) );
+            }
+        } );
     }
 
     Mono<Boolean> deleteObjects(Flux<ObjectIdentifier> objects, Bucket bucket) {
-        return objects.buffer( DELETE_OBJECTS_MAX )
-                .map(objectIdentifiers -> Delete.builder().objects( objectIdentifiers ).build() )
-                .map(delete -> DeleteObjectsRequest.builder().bucket( bucket.name() ).delete( delete ).build() )
-                .flatMap( request -> Mono.fromFuture(s3Client.deleteObjects( request ) )
-                        .map(response -> {
-                            System.out.println(response);
-                            if ( response.hasErrors() && !response.errors().isEmpty() ) {
+        return objects.buffer( DELETE_FILES_MAX )
+                .map( objectIdentifiers -> Delete.builder().objects( objectIdentifiers ).build() )
+                .map( delete -> DeleteObjectsRequest.builder().bucket( bucket.name() ).delete( delete ).build() )
+                .flatMap( request -> Mono.fromFuture( s3Client.deleteObjects( request ) )
+                        .map( response -> {
+                            System.out.println( response );
+                            if (response.hasErrors() && !response.errors().isEmpty()) {
                                 return false;
                             }
                             return response.hasDeleted() && !response.deleted().isEmpty();
-                        } ) ).all(b -> b);
+                        } ) ).all( b -> b );
     }
 
     // for testing
     Mono<Bucket> deleteAllObjectsInBucket(Bucket bucket) {
-        var objects = this.listObjects(bucket)
-                .map(S3Object::key)
+        var objects = this.listObjects( bucket )
+                .map( S3Object::key )
                 .map( k -> ObjectIdentifier
                         .builder()
                         .key( k ).build() );
-        return deleteObjects( objects, bucket ).filter( res -> false).map( failure -> { throw new IllegalStateException("unable to delete bucket"); } )
-                .thenReturn(bucket);
+        return deleteObjects( objects, bucket ).filter( res -> false ).map( failure -> {
+                    throw new IllegalStateException( "unable to delete bucket" );
+                } )
+                .thenReturn( bucket );
     }
 
     // for testing: this is not suitable for production.  Will only be able to list first 1000 objects
@@ -172,14 +206,14 @@ public class S3FileStore implements FileStore {
         var request = ListObjectsV2Request.builder()
                 .bucket( bucketName )
                 .build();
-        return Mono.fromFuture(s3Client.listObjectsV2( request ) )
+        return Mono.fromFuture( s3Client.listObjectsV2( request ) )
                 .mapNotNull( ListObjectsV2Response::contents )
                 .flatMapMany( Flux::fromIterable );
     }
 
     // for testing
     Flux<Bucket> listBuckets() {
-        return Mono.fromFuture(s3Client.listBuckets() )
+        return Mono.fromFuture( s3Client.listBuckets() )
                 .map( ListBucketsResponse::buckets )
                 .flatMapMany( Flux::fromIterable );
     }
@@ -189,7 +223,7 @@ public class S3FileStore implements FileStore {
         var request = ListObjectsV2Request.builder()
                 .bucket( bucket.name() )
                 .build();
-        return Mono.fromFuture(s3Client.listObjectsV2( request ) )
+        return Mono.fromFuture( s3Client.listObjectsV2( request ) )
                 .mapNotNull( ListObjectsV2Response::contents )
                 .flatMapMany( Flux::fromIterable );
     }
@@ -204,7 +238,7 @@ public class S3FileStore implements FileStore {
 
     private Mono<Void> generateIsReady() {
         return this.createBucketIfNotExists()
-                .timeout(READY_TIMEOUT)
+                .timeout( READY_TIMEOUT )
                 .then()
                 .cache();
 
