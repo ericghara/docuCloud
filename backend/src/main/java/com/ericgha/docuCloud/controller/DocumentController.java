@@ -69,8 +69,8 @@ public class DocumentController {
         return documentService.ls( source, cloudUser )
                 .doOnError( e -> response.setStatusCode(
                         StatusCodeMapper.mapThrowable( e,
-                                Map.of( RecordNotFoundException.class, NOT_FOUND,
-                                        IllegalObjectTypeException.class, BAD_REQUEST ) ) ) );
+                                RecordNotFoundException.class, NOT_FOUND,
+                                IllegalObjectTypeException.class, BAD_REQUEST  ) ) );
     }
 
     @GetMapping("versionsFirst")
@@ -78,7 +78,7 @@ public class DocumentController {
         return documentService.fetchFirstPageFileVersions( source, limit, cloudUser );
     }
 
-    @GetMapping("versionNext")
+    @GetMapping("versionsNext")
     public Flux<FileViewDto> versionsNext(FileViewDto last, int limit, @AuthenticationPrincipal CloudUser cloudUser) {
         return documentService.fetchNextPage( last, limit, cloudUser );
     }
